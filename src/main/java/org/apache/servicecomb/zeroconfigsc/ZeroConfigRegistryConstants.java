@@ -1,6 +1,10 @@
 package org.apache.servicecomb.zeroconfigsc;
 
 public interface ZeroConfigRegistryConstants {
+    
+    // MulticastSocket related
+    String GROUP  = "225.0.0.0";
+    Integer PORT = 6666;
 
     // MDNS Related
     String MDNS_SERVICE_NAME_SUFFIX = "._http._tcp.local.";
