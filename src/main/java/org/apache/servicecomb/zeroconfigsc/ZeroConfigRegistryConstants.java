@@ -2,16 +2,9 @@ package org.apache.servicecomb.zeroconfigsc;
 
 public interface ZeroConfigRegistryConstants {
 
-    // MDNS Related test
-    String MDNS_SERVICE_NAME_SUFFIX = "._http._tcp.local.";
-    String MDNS_HOST_NAME_SUFFIX = ".local.";
-    String[] DISCOVER_SERVICE_TYPES = new String[]
-            {
-                    "_http._tcp.",              // Web pages
-                    "_printer._sub._http._tcp", // Printer configuration web pages
-                    "_org.smpte.st2071.device:device_v1.0._sub._mdc._tcp",  // SMPTE ST2071 Devices
-                    "_org.smpte.st2071.service:service_v1.0._sub._mdc._tcp"  // SMPTE ST2071 Services
-            };
+    // MulticastSocket related
+    String GROUP  = "225.0.0.0";
+    Integer PORT = 6666;
 
     // Microservice Attributes
     String APP_ID = "appId";
