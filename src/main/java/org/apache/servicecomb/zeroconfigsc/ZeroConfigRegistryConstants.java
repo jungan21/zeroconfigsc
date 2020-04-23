@@ -2,7 +2,7 @@ package org.apache.servicecomb.zeroconfigsc;
 
 public interface ZeroConfigRegistryConstants {
 
-    // MDNS Related
+    // MDNS Related test
     String MDNS_SERVICE_NAME_SUFFIX = "._http._tcp.local.";
     String MDNS_HOST_NAME_SUFFIX = ".local.";
     String[] DISCOVER_SERVICE_TYPES = new String[]
