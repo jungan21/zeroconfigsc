@@ -1,10 +1,12 @@
 package org.apache.servicecomb.zeroconfigsc;
 
-import net.posick.mDNS.*;
+
+import org.apache.servicecomb.zeroconfigsc.server.ServerMicroserviceInstance;
+import org.apache.servicecomb.zeroconfigsc.server.ZeroConfigRegistryServerUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import java.io.IOException;
-import java.util.*;
+import java.util.List;
+import java.util.Map;
 
 
 /**
@@ -16,39 +18,15 @@ public class ZeroConfigServiceRegistryFacade {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ZeroConfigServiceRegistryFacade.class);
 
-    /**
-     * @param serviceName
-     * @return service endpoint
-     * @throws IOException
-     */
-    public static String discover(String serviceName) throws IOException {
-        String endpoint = null;
-        ServiceName mdnsServiceName  = new ServiceName(serviceName + MDNS_SERVICE_NAME_SUFFIX);
-        Lookup lookup = null;
-        try {
-            lookup = new Lookup(mdnsServiceName);
-            ServiceInstance[] services = lookup.lookupServices();
-            for (ServiceInstance service : services) {
-                Map<String, String> attributesMap = service.getTextAttributes();
-                if (attributesMap != null && attributesMap.containsKey(ENDPOINTS)) {
-                    String tempEndpoint = attributesMap.get(ENDPOINTS);
-                    if (!tempEndpoint.contains(SCHEMA_ENDPOINT_LIST_SPLITER)){
-                        endpoint = tempEndpoint.replace(ENDPOINT_PREFIX_REST, ENDPOINT_PREFIX_HTTP);
-                    } else {
-                        endpoint = tempEndpoint.split("\\$")[0].replace(ENDPOINT_PREFIX_REST, ENDPOINT_PREFIX_HTTP);
-                    }
-                }
-            }
-        } finally {
-            if (lookup != null) {
-                try {
-                    lookup.close();
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
+    public static List<String> discover(String serviceName) {
+        Map<String, List<ServerMicroserviceInstance>> map = ZeroConfigRegistryServerUtil.getserverMicroserviceInstanceMapByServiceName();
+        if (map.containsKey(serviceName)){
+            List<ServerMicroserviceInstance> list = map.get(serviceName);
+            if (list != null && !list.isEmpty()){
+                return list.get(0).getEndpoints();
             }
         }
-        return endpoint;
+        return null;
     }
 
 }

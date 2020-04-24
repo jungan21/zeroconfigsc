@@ -1,7 +1,5 @@
 package org.apache.servicecomb.zeroconfigsc.server;
 
-import net.posick.mDNS.ServiceInstance;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -17,16 +15,12 @@ public class ZeroConfigRegistryService {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ZeroConfigRegistryService.class);
 
+    public void registerMicroserviceInstance(Map<String, String> serviceAttributeMap) {
+         LOGGER.info("Start register service: {} " + serviceAttributeMap);
 
-    /**
-     * register service instance
-     *
-     * @param mdnsService
-     */
-    public void registerMicroserviceInstance(ServiceInstance mdnsService) {
-        String instanceId = (String) mdnsService.getTextAttributes().get(INSTANCE_ID);
-        String serviceId = (String) mdnsService.getTextAttributes().get(SERVICE_ID);
-        String serviceName = (String) mdnsService.getTextAttributes().get(SERVICE_NAME);
+        String instanceId = serviceAttributeMap.get(INSTANCE_ID);
+        String serviceId = serviceAttributeMap.get(SERVICE_ID);
+        String serviceName = serviceAttributeMap.get(SERVICE_NAME);
 
         if ( serviceId == null || serviceName == null || instanceId == null ) {
             LOGGER.error("serviceId: {} is null OR  instanceId: {} is null OR serviceName: {} is null", serviceId, instanceId, serviceName);
@@ -34,7 +28,7 @@ public class ZeroConfigRegistryService {
         }
 
         // convert to server side ServerMicroserviceInstance object
-        Optional<ServerMicroserviceInstance> newServerMicroserviceInstance = ZeroConfigRegistryServerUtil.convertToServerMicroserviceInstance(mdnsService);
+        Optional<ServerMicroserviceInstance> newServerMicroserviceInstance = ZeroConfigRegistryServerUtil.convertToServerMicroserviceInstance(serviceAttributeMap);
 
         // add/update in-memory map
         Map<String, ServerMicroserviceInstance> innerInstanceMap = ZeroConfigRegistryServerUtil.getServerMicroserviceInstanceMap().
@@ -48,7 +42,7 @@ public class ZeroConfigRegistryService {
         if (innerInstanceMap.containsKey(instanceId)) {
             // update existing instance status
             LOGGER.info("Update existing microservice instance. serviceId: {}, instanceId: {}", serviceId, instanceId);
-            innerInstanceMap.get(instanceId).setStatus((String)mdnsService.getTextAttributes().get(STATUS));
+            innerInstanceMap.get(instanceId).setStatus(serviceAttributeMap.get(STATUS));
         } else {
             // register a new instance for the service
             LOGGER.info("Register a new instance for  serviceId: {}, instanceId: {}", serviceId, instanceId);
@@ -57,13 +51,10 @@ public class ZeroConfigRegistryService {
 
     }
 
-    /**
-     * unregister microservice
-     *
-     * @param microserviceId
-     * @param microserviceInstanceId
-     */
-    public void unregisterMicroserviceInstance(String microserviceId, String microserviceInstanceId) {
+    public void unregisterMicroserviceInstance(Map<String, String> serviceAttributeMap) {
+        String microserviceId = serviceAttributeMap.get(SERVICE_ID);
+        String microserviceInstanceId = serviceAttributeMap.get(INSTANCE_ID);
+
         Map<String, ServerMicroserviceInstance> innerInstanceMap = ZeroConfigRegistryServerUtil.getServerMicroserviceInstanceMap().get(microserviceId);
 
         if (innerInstanceMap != null && innerInstanceMap.containsKey(microserviceInstanceId)){

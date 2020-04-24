@@ -3,8 +3,11 @@ package org.apache.servicecomb.zeroconfigsc;
 public interface ZeroConfigRegistryConstants {
 
     // MulticastSocket related
-    String GROUP  = "225.0.0.0";
+    String GROUP = "225.0.0.0";
     Integer PORT = 6666;
+    String EVENT = "event";
+    String REGISTER_EVENT = "register";
+    String UNREGISTER_EVENT = "register";
 
     // Microservice Attributes
     String APP_ID = "appId";

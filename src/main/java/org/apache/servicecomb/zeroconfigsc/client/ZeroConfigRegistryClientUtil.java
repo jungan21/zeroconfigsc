@@ -1,33 +1,24 @@
 package org.apache.servicecomb.zeroconfigsc.client;
 
-import static org.apache.servicecomb.zeroconfigsc.ZeroConfigRegistryConstants.APP_ID;
-import static org.apache.servicecomb.zeroconfigsc.ZeroConfigRegistryConstants.SERVICE_ID;
-import static org.apache.servicecomb.zeroconfigsc.ZeroConfigRegistryConstants.SERVICE_NAME;
-import static org.apache.servicecomb.zeroconfigsc.ZeroConfigRegistryConstants.VERSION;
-import static org.apache.servicecomb.zeroconfigsc.ZeroConfigRegistryConstants.STATUS;
-import static org.apache.servicecomb.zeroconfigsc.ZeroConfigRegistryConstants.ENDPOINTS;
-import static org.apache.servicecomb.zeroconfigsc.ZeroConfigRegistryConstants.HOST_NAME;
-import static org.apache.servicecomb.zeroconfigsc.ZeroConfigRegistryConstants.INSTANCE_ID;
-import static org.apache.servicecomb.zeroconfigsc.ZeroConfigRegistryConstants.SCHEMA_ENDPOINT_LIST_SPLITER;
-import static org.apache.servicecomb.zeroconfigsc.ZeroConfigRegistryConstants.UUID_SPLITER;
-
 import org.apache.servicecomb.zeroconfigsc.server.ServerMicroserviceInstance;
-import org.apache.servicecomb.foundation.common.net.IpPort;
 import org.apache.servicecomb.serviceregistry.api.registry.Microservice;
 import org.apache.servicecomb.serviceregistry.api.registry.MicroserviceInstance;
 import org.apache.servicecomb.serviceregistry.api.registry.MicroserviceInstanceStatus;
-import org.apache.servicecomb.serviceregistry.client.IpPortManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.xbill.DNS.Name;
 import java.util.*;
+
+import static org.apache.servicecomb.zeroconfigsc.ZeroConfigRegistryConstants.*;
 
 public class ZeroConfigRegistryClientUtil {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ZeroConfigRegistryClientUtil.class);
 
-    public static Optional<Map<String, String>> convertToMDNSServiceInstance(String serviceId, String microserviceInstanceId, MicroserviceInstance microserviceInstance, IpPortManager ipPortManager, Microservice microservice) {
+    public static Optional<Map<String, String>> convertToMDNSServiceInstance(String serviceId, String microserviceInstanceId, MicroserviceInstance microserviceInstance, Microservice microservice) {
         Map<String, String> serviceInstanceTextAttributesMap = new HashMap<>();
+
+        serviceInstanceTextAttributesMap.put(EVENT, REGISTER_EVENT);
+        serviceInstanceTextAttributesMap.put(VERSION, microservice.getVersion());
         serviceInstanceTextAttributesMap.put(SERVICE_ID, serviceId);
         serviceInstanceTextAttributesMap.put(INSTANCE_ID, microserviceInstanceId);
         serviceInstanceTextAttributesMap.put(STATUS, microserviceInstance.getStatus().toString());
@@ -37,8 +28,6 @@ public class ZeroConfigRegistryClientUtil {
 
         String hostName = microserviceInstance.getHostName();
         serviceInstanceTextAttributesMap.put(HOST_NAME, hostName);
-        Name mdnsHostName = new Name(hostName + MDNS_HOST_NAME_SUFFIX);
-
 
         // use special spliter for schema list otherwise, MDNS can't parse the string list properly i.e.  [schema1, schema2]
         // schema1$schema2

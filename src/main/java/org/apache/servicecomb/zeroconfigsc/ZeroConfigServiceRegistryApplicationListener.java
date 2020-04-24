@@ -36,7 +36,7 @@ public class ZeroConfigServiceRegistryApplicationListener implements Application
 
         ServiceRegistryConfig serviceRegistryConfig = ServiceRegistryConfig.INSTANCE;
         Function<ServiceRegistry, ServiceRegistryClient> serviceRegistryClientConstructor =
-                serviceRegistry -> new ZeroConfigServiceRegistryClientImpl(serviceRegistryConfig);
+                serviceRegistry -> new ZeroConfigServiceRegistryClientImpl();
         serviceRegistryConfig.setServiceRegistryClientConstructor(serviceRegistryClientConstructor);
     }
 

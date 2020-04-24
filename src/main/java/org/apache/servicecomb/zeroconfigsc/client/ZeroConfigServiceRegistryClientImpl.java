@@ -1,13 +1,8 @@
 package org.apache.servicecomb.zeroconfigsc.client;
 
-import static org.apache.servicecomb.zeroconfigsc.ZeroConfigRegistryConstants.MDNS_SERVICE_NAME_SUFFIX;
-import static org.apache.servicecomb.zeroconfigsc.ZeroConfigRegistryConstants.INSTANCE_HEARTBEAT_RESPONSE_MESSAGE_OK;
-
 import com.google.common.base.Charsets;
 import com.google.common.hash.Hashing;
-import net.posick.mDNS.MulticastDNSService;
-import net.posick.mDNS.ServiceInstance;
-import net.posick.mDNS.ServiceName;
+
 import org.apache.servicecomb.zeroconfigsc.server.ZeroConfigRegistryService;
 import org.apache.servicecomb.zeroconfigsc.server.ServerMicroserviceInstance;
 import org.apache.servicecomb.foundation.vertx.AsyncResultCallback;
@@ -16,11 +11,9 @@ import org.apache.servicecomb.serviceregistry.api.response.FindInstancesResponse
 import org.apache.servicecomb.serviceregistry.api.response.GetSchemaResponse;
 import org.apache.servicecomb.serviceregistry.api.response.HeartbeatResponse;
 import org.apache.servicecomb.serviceregistry.api.response.MicroserviceInstanceChangedEvent;
-import org.apache.servicecomb.serviceregistry.client.IpPortManager;
 import org.apache.servicecomb.serviceregistry.client.ServiceRegistryClient;
 import org.apache.servicecomb.serviceregistry.client.http.Holder;
 import org.apache.servicecomb.serviceregistry.client.http.MicroserviceInstances;
-import org.apache.servicecomb.serviceregistry.config.ServiceRegistryConfig;
 import org.apache.servicecomb.serviceregistry.version.Version;
 import org.apache.servicecomb.serviceregistry.version.VersionRule;
 import org.apache.servicecomb.serviceregistry.version.VersionRuleUtils;
@@ -30,23 +23,26 @@ import org.slf4j.LoggerFactory;
 
 import javax.ws.rs.core.Response;
 import java.io.IOException;
+import java.net.DatagramPacket;
+import java.net.InetAddress;
+import java.net.MulticastSocket;
 import java.util.*;
 import java.util.stream.Collectors;
+
+import static org.apache.servicecomb.zeroconfigsc.ZeroConfigRegistryConstants.*;
 
 public class ZeroConfigServiceRegistryClientImpl implements ServiceRegistryClient {
     private static final Logger LOGGER = LoggerFactory.getLogger(ZeroConfigServiceRegistryClientImpl.class);
 
-    private IpPortManager ipPortManager;
-    private MulticastDNSService multicastDNSService;
+    private MulticastSocket multicastSocket ;
     private ZeroConfigRegistryService zeroConfigRegistryService;
     private Microservice currentMicroservice;
 
-    public ZeroConfigServiceRegistryClientImpl(ServiceRegistryConfig serviceRegistryConfig){
-        this.ipPortManager = new IpPortManager(serviceRegistryConfig);
+    public ZeroConfigServiceRegistryClientImpl(){
         try {
-            this.multicastDNSService = new MulticastDNSService();
+            this.multicastSocket = new MulticastSocket();
         } catch (IOException e) {
-            LOGGER.error("Failed to create MulticastDNSService object", e);
+            LOGGER.error("Failed to create MulticastSocket object", e);
         }
         // for query ONLY, for update, we have to broadcast
         this.zeroConfigRegistryService = new ZeroConfigRegistryService();
@@ -131,7 +127,6 @@ public class ZeroConfigServiceRegistryClientImpl implements ServiceRegistryClien
 
     @Override
     public Holder<List<GetSchemaResponse>> getSchemas(String microserviceId) {
-        // this method is called in MicroserviceRegisterTask.java doRegister()
         Holder<List<GetSchemaResponse>> resultHolder = new Holder<>();
         if (currentMicroservice == null) {
             LOGGER.error("Invalid serviceId! Failed to retrieve microservice for serviceId {}", microserviceId);
@@ -159,10 +154,12 @@ public class ZeroConfigServiceRegistryClientImpl implements ServiceRegistryClien
 
         try {
             // need currentMicroservice object to retrieve serviceName/appID/version attributes for instance to be registered
-            Optional<ServiceInstance> optionalServiceInstance = ZeroConfigRegistryClientUtil.convertToMDNSServiceInstance(serviceId, instanceId, instance, this.ipPortManager, this.currentMicroservice);
+            Optional<Map<String, String>> optionalServiceInstance = ZeroConfigRegistryClientUtil.convertToMDNSServiceInstance(serviceId, instanceId, instance, this.currentMicroservice);
 
             if (optionalServiceInstance.isPresent()){
-                this.multicastDNSService.register(optionalServiceInstance.get()); // broadcast to MDNS
+                byte[] instanceData = optionalServiceInstance.get().toString().getBytes();
+                DatagramPacket instanceDataPacket = new DatagramPacket(instanceData, instanceData.length, InetAddress.getByName(GROUP), PORT);
+                this.multicastSocket.send(instanceDataPacket);
             } else {
                 LOGGER.error("Failed to register microservice instance. Because optionalServiceInstance is null/empty: {}", optionalServiceInstance);
                 return null;
@@ -213,13 +210,17 @@ public class ZeroConfigServiceRegistryClientImpl implements ServiceRegistryClien
 
         if (optionalServerMicroserviceInstance.isPresent()) {
             try {
-                // convention to append "._http._tcp.local."
                 LOGGER.info("Start unregister microservice instance. The instance with servcieId: {} instanceId:{}", microserviceId, microserviceInstanceId);
-                ServiceName mdnsServiceName = new ServiceName(optionalServerMicroserviceInstance.get().getServiceName() + MDNS_SERVICE_NAME_SUFFIX);
-                // broadcast to MDNS
-                return this.multicastDNSService.unregister(mdnsServiceName);
+                Map<String, String> map = new HashMap<>();
+                map.put(EVENT, UNREGISTER_EVENT);
+                map.put(SERVICE_ID, microserviceId);
+                map.put(INSTANCE_ID, microserviceInstanceId);
+                byte[] unregisterEvent = map.toString().getBytes();
+                DatagramPacket unregisterInstanceDataPacket = new DatagramPacket(unregisterEvent, unregisterEvent.length, InetAddress.getByName(GROUP), PORT);
+                this.multicastSocket.send(unregisterInstanceDataPacket);
+                return true;
             } catch (IOException e) {
-                LOGGER.error("Failed to unregister microservice instance from mdns server. servcieId: {} instanceId:{}", microserviceId, microserviceInstanceId,  e);
+                LOGGER.error("Failed to broadcast unregister microservice instance event. servcieId: {} instanceId:{}", microserviceId, microserviceInstanceId,  e);
                 return false;
             }
 
