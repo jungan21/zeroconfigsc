@@ -37,10 +37,12 @@ public class ZeroConfigServiceRegistryClientImpl implements ServiceRegistryClien
     private MulticastSocket multicastSocket ;
     private ZeroConfigRegistryService zeroConfigRegistryService;
     private Microservice currentMicroservice;
+    private MicroserviceInstance currentMicroserviceInstance;
 
     public ZeroConfigServiceRegistryClientImpl(){
         try {
             this.multicastSocket = new MulticastSocket();
+            this.multicastSocket.setLoopbackMode(false);
         } catch (IOException e) {
             LOGGER.error("Failed to create MulticastSocket object", e);
         }
@@ -151,7 +153,7 @@ public class ZeroConfigServiceRegistryClientImpl implements ServiceRegistryClien
         if (instanceId == null || instanceId.length() == 0){
             instanceId = ZeroConfigRegistryClientUtil.generateServiceInstanceId(instance);
         }
-
+        // TODO: 保持一个临时的 instance, 然后每隔几秒就发送一个心跳再自注册 广播一下
         try {
             // need currentMicroservice object to retrieve serviceName/appID/version attributes for instance to be registered
             Optional<Map<String, String>> optionalServiceInstance = ZeroConfigRegistryClientUtil.convertToMDNSServiceInstance(serviceId, instanceId, instance, this.currentMicroservice);

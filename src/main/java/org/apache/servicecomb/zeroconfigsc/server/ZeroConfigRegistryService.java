@@ -16,7 +16,7 @@ public class ZeroConfigRegistryService {
     private static final Logger LOGGER = LoggerFactory.getLogger(ZeroConfigRegistryService.class);
 
     public void registerMicroserviceInstance(Map<String, String> serviceAttributeMap) {
-         LOGGER.info("Start register service: {} " + serviceAttributeMap);
+         LOGGER.info("Start register service: {} ", serviceAttributeMap);
 
         String instanceId = serviceAttributeMap.get(INSTANCE_ID);
         String serviceId = serviceAttributeMap.get(SERVICE_ID);

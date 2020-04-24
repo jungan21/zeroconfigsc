@@ -85,29 +85,21 @@ public class ZeroConfigRegistryServerUtil {
     }
 
     private static Map<String, String> getMapFromString(String str){
-        if (str.startsWith("{")) {
-            str = str.substring(1, str.length());
-        }
-        if (str.endsWith("}")) {
-            str = str.substring(0, str.length() - 1);
-        }
-
-        //根据逗号截取字符串数组
-        String[] keyValueArray = str.split(",");
-        //创建Map对象
         Map<String,String> map = new HashMap<>();
-        //循环加入map集合
-        for (int i = 0; i < keyValueArray.length; i++) {
-            //根据":"截取字符串数组
-            String[] str2 = keyValueArray[i].split("=");
-            //str2[0]为KEY,str2[1]为值
-            // str2.length-1 为下标最大值
-            if(str2.length-1 == 0){
-                map.put(str2[0].trim(),"");
-            }else{
-                map.put(str2[0].trim(),str2[1].trim());
+        String trimedString = str.trim();
+        if (trimedString.startsWith("{") && trimedString.endsWith("}") && trimedString.length() > 2) {
+            trimedString = trimedString.substring(1, trimedString.length()-1);
+            String[] keyValue = trimedString.split(",");
+            for (int i = 0; i < keyValue.length; i++) {
+                String[] str2 = keyValue[i].split("=");
+                if(str2.length-1 == 0){
+                    map.put(str2[0].trim(),"");
+                }else{
+                    map.put(str2[0].trim(),str2[1].trim());
+                }
             }
-
+        } else {
+            LOGGER.error("Wrong format of the input received string: {}", trimedString);
         }
         return map;
     }
@@ -125,8 +117,14 @@ public class ZeroConfigRegistryServerUtil {
                 DatagramPacket receivePacketBuffer = new DatagramPacket(buffer, buffer.length);
                 multicastSocket.receive(receivePacketBuffer);
                 String receivedPacketString = new String(receivePacketBuffer.getData());
-                LOGGER.info("Received service register/unregister event: {}" + receivedPacketString);
+
+                /**
+                 * TODO Received service register/unregister event: {}{hostName=DESKTOP-Q2K46AO, instanceId=e3f169d7, appId=springmvc-sample, event=register,
+                 *  serviceId=16e8633d, serviceName=springmvcConsumer, version=0.0.2, status=UP}version=0.0.2, status=UP}
+                 */
+                LOGGER.info("Received service register/unregister event: {}", receivedPacketString);
                 Map<String, String> receivedStringMap = getMapFromString(receivedPacketString);
+                LOGGER.info("Converted service register/unregister event to Map {}", receivedStringMap);
                 if ( receivedStringMap != null && receivedStringMap.containsKey(EVENT)){
 
                     String event = receivedStringMap.get(EVENT);
