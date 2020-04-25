@@ -29,16 +29,16 @@ public class ServerUtil {
     private static ZeroConfigRegistryService zeroConfigRegistryService;
 
     // 1st key: serviceId, 2nd key: instanceId
-    private static Map<String, Map<String, ServerMicroserviceInstance>>  serverMicroserviceInstanceMap = new ConcurrentHashMap<>();
+    private static Map<String, Map<String, ServerMicroservice>>  serverMicroserviceInstanceMap = new ConcurrentHashMap<>();
 
     // 1st key: serviceName, 2nd key: Version
-    private static Map<String, List<ServerMicroserviceInstance>>  serverMicroserviceInstanceMapByServiceName = new ConcurrentHashMap<>();
+    private static Map<String, List<ServerMicroservice>>  serverMicroserviceInstanceMapByServiceName = new ConcurrentHashMap<>();
 
-    public static Map<String, Map<String, ServerMicroserviceInstance>>  getServerMicroserviceInstanceMap() {
+    public static Map<String, Map<String, ServerMicroservice>>  getServerMicroserviceInstanceMap() {
         return serverMicroserviceInstanceMap;
     }
 
-    public static Map<String, List<ServerMicroserviceInstance>>  getserverMicroserviceInstanceMapByServiceName() {
+    public static Map<String, List<ServerMicroservice>>  getserverMicroserviceInstanceMapByServiceName() {
         return serverMicroserviceInstanceMapByServiceName;
     }
 
@@ -52,33 +52,47 @@ public class ServerUtil {
 
     }
 
-    public static Optional<ServerMicroserviceInstance> convertToServerMicroserviceInstance(ServiceInstance serviceInstance){
+    public static Optional<ServerMicroservice> convertToServerMicroserviceInstance(ServiceInstance serviceInstance){
         Map<String, String> serviceInstanceTextAttributesMap = serviceInstance.getTextAttributes();
         return  Optional.of(buildServerMicroserviceInstanceFromMap(serviceInstanceTextAttributesMap));
     }
 
-    private static ServerMicroserviceInstance buildServerMicroserviceInstanceFromMap (Map<String, String> map) {
-        ServerMicroserviceInstance serverMicroserviceInstance = new ServerMicroserviceInstance();
-        serverMicroserviceInstance.setInstanceId(map.get(INSTANCE_ID));
-        serverMicroserviceInstance.setServiceId(map.get(SERVICE_ID));
-        serverMicroserviceInstance.setStatus(map.get(STATUS));
-        serverMicroserviceInstance.setHostName(map.get(HOST_NAME));
-        serverMicroserviceInstance.setAppId(map.get(APP_ID));
-        serverMicroserviceInstance.setServiceName(map.get(SERVICE_NAME));
-        serverMicroserviceInstance.setVersion(map.get(VERSION));
+    private static ServerMicroservice buildServerMicroserviceInstanceFromMap (Map<String, String> map) {
+        ServerMicroservice serverMicroservice = new ServerMicroservice();
+        serverMicroservice.setInstanceId(map.get(INSTANCE_ID));
+        serverMicroservice.setServiceId(map.get(SERVICE_ID));
+        serverMicroservice.setStatus(map.get(STATUS));
+        serverMicroservice.setHostName(map.get(HOST_NAME));
+        serverMicroservice.setAppId(map.get(APP_ID));
+        serverMicroservice.setServiceName(map.get(SERVICE_NAME));
+        serverMicroservice.setVersion(map.get(VERSION));
 
         // rest://127.0.0.1:8080$rest://127.0.0.1:8081
         String endPointsString = map.get(ENDPOINTS);
         if ( endPointsString != null && !endPointsString.isEmpty()){
             if (endPointsString.contains(SCHEMA_ENDPOINT_LIST_SPLITER)){
-                serverMicroserviceInstance.setEndpoints(Arrays.asList(endPointsString.split("\\$")));
+                serverMicroservice.setEndpoints(Arrays.asList(endPointsString.split("\\$")));
             } else {
                 List<String> list  = new ArrayList<>();
                 list.add(endPointsString);
-                serverMicroserviceInstance.setEndpoints(list);
+                serverMicroservice.setEndpoints(list);
             }
         }
-        return serverMicroserviceInstance;
+
+        // schemaId1$schemaId2
+        String schemaIdsString = map.get(SCHEMA_IDS);
+        if ( schemaIdsString != null && !schemaIdsString.isEmpty()){
+            if (schemaIdsString.contains(SCHEMA_ENDPOINT_LIST_SPLITER)){
+                serverMicroservice.setEndpoints(Arrays.asList(endPointsString.split("\\$")));
+            } else {
+                List<String> list  = new ArrayList<>();
+                list.add(schemaIdsString);
+                serverMicroservice.setEndpoints(list);
+            }
+        }
+
+
+        return serverMicroservice;
     }
 
     private static void startAsyncListenerForRegisteredServices () {
@@ -97,9 +111,9 @@ public class ServerUtil {
                         LOGGER.info("Microservice Instance is registered to MDNS server {}", serviceTextAttributesMap);
 
                         // for debug start register
-                        Map<String, Map<String, ServerMicroserviceInstance>> instanceMap = ServerUtil.getServerMicroserviceInstanceMap();
+                        Map<String, Map<String, ServerMicroservice>> instanceMap = ServerUtil.getServerMicroserviceInstanceMap();
                         System.out.println("Jun Debug instanceMap register: " + instanceMap);
-                        Map<String, List<ServerMicroserviceInstance>> instanceByNameMap = ServerUtil.getserverMicroserviceInstanceMapByServiceName();
+                        Map<String, List<ServerMicroservice>> instanceByNameMap = ServerUtil.getserverMicroserviceInstanceMapByServiceName();
                         System.out.println("Jun Debug instanceByNameMap register: " + instanceByNameMap);
                         // for debug start register
 
@@ -117,9 +131,9 @@ public class ServerUtil {
                         LOGGER.info("Microservice Instance is unregistered from MDNS server {}", service.getTextAttributes());
 
                         // for debug start unregister
-                        Map<String, Map<String, ServerMicroserviceInstance>> instanceMap = ServerUtil.getServerMicroserviceInstanceMap();
+                        Map<String, Map<String, ServerMicroservice>> instanceMap = ServerUtil.getServerMicroserviceInstanceMap();
                         System.out.println("Jun Debug instanceMap unregister: " + instanceMap);
-                        Map<String, List<ServerMicroserviceInstance>> instanceByNameMap = ServerUtil.getserverMicroserviceInstanceMapByServiceName();
+                        Map<String, List<ServerMicroservice>> instanceByNameMap = ServerUtil.getserverMicroserviceInstanceMapByServiceName();
                         System.out.println("Jun Debug instanceByNameMap unregister: " + instanceByNameMap);
                         // for debug start unregister
                     } else {

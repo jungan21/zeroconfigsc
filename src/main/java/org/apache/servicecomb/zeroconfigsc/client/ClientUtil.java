@@ -2,7 +2,7 @@ package org.apache.servicecomb.zeroconfigsc.client;
 
 import net.posick.mDNS.ServiceInstance;
 import net.posick.mDNS.ServiceName;
-import org.apache.servicecomb.zeroconfigsc.server.ServerMicroserviceInstance;
+import org.apache.servicecomb.zeroconfigsc.server.ServerMicroservice;
 import org.apache.servicecomb.foundation.common.net.IpPort;
 import org.apache.servicecomb.serviceregistry.api.registry.Microservice;
 import org.apache.servicecomb.serviceregistry.api.registry.MicroserviceInstance;
@@ -75,13 +75,13 @@ public class ClientUtil {
         return Optional.empty();
     }
 
-    public static MicroserviceInstance convertToClientMicroserviceInstance(ServerMicroserviceInstance serverMicroserviceInstance) {
+    public static MicroserviceInstance convertToClientMicroserviceInstance(ServerMicroservice serverMicroservice) {
         MicroserviceInstance microserviceInstance =  new MicroserviceInstance();
-        microserviceInstance.setServiceId(serverMicroserviceInstance.getServiceId());
-        microserviceInstance.setInstanceId(serverMicroserviceInstance.getInstanceId());
-        microserviceInstance.setHostName(serverMicroserviceInstance.getHostName());
-        microserviceInstance.setEndpoints(serverMicroserviceInstance.getEndpoints());
-        microserviceInstance.setStatus(MicroserviceInstanceStatus.valueOf(serverMicroserviceInstance.getStatus()));
+        microserviceInstance.setServiceId(serverMicroservice.getServiceId());
+        microserviceInstance.setInstanceId(serverMicroservice.getInstanceId());
+        microserviceInstance.setHostName(serverMicroservice.getHostName());
+        microserviceInstance.setEndpoints(serverMicroservice.getEndpoints());
+        microserviceInstance.setStatus(MicroserviceInstanceStatus.valueOf(serverMicroservice.getStatus()));
         return microserviceInstance;
     }
 

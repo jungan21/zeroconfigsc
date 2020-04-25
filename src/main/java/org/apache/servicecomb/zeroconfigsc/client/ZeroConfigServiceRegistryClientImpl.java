@@ -7,7 +7,7 @@ import net.posick.mDNS.MulticastDNSService;
 import net.posick.mDNS.ServiceInstance;
 import net.posick.mDNS.ServiceName;
 import org.apache.servicecomb.zeroconfigsc.server.ZeroConfigRegistryService;
-import org.apache.servicecomb.zeroconfigsc.server.ServerMicroserviceInstance;
+import org.apache.servicecomb.zeroconfigsc.server.ServerMicroservice;
 import org.apache.servicecomb.foundation.vertx.AsyncResultCallback;
 import org.apache.servicecomb.serviceregistry.api.registry.*;
 import org.apache.servicecomb.serviceregistry.api.response.FindInstancesResponse;
@@ -224,7 +224,7 @@ public class ZeroConfigServiceRegistryClientImpl implements ServiceRegistryClien
     @Override
     public List<MicroserviceInstance> getMicroserviceInstance(String consumerId, String providerId) {
         List<MicroserviceInstance> microserviceInstanceResultList = new ArrayList<>();
-        Optional<List<ServerMicroserviceInstance>> optionalServerMicroserviceInstanceList = this.zeroConfigRegistryService.getMicroserviceInstance(consumerId, providerId);
+        Optional<List<ServerMicroservice>> optionalServerMicroserviceInstanceList = this.zeroConfigRegistryService.getMicroserviceInstance(consumerId, providerId);
         if (optionalServerMicroserviceInstanceList.isPresent()) {
             microserviceInstanceResultList = optionalServerMicroserviceInstanceList.get().stream().map(serverInstance -> {
                 return ClientUtil.convertToClientMicroserviceInstance(serverInstance);}).collect(Collectors.toList());
@@ -363,7 +363,7 @@ public class ZeroConfigServiceRegistryClientImpl implements ServiceRegistryClien
 
     @Override
     public MicroserviceInstance findServiceInstance(String serviceId, String instanceId) {
-        Optional<ServerMicroserviceInstance>  optionalServerMicroserviceInstance = this.zeroConfigRegistryService.findServiceInstance(serviceId, instanceId);
+        Optional<ServerMicroservice>  optionalServerMicroserviceInstance = this.zeroConfigRegistryService.findServiceInstance(serviceId, instanceId);
 
         if (optionalServerMicroserviceInstance.isPresent()) {
             return ClientUtil.convertToClientMicroserviceInstance(optionalServerMicroserviceInstance.get());

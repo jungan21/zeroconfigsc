@@ -34,14 +34,14 @@ public class ZeroConfigRegistryService {
         }
 
         // convert to server side ServerMicroserviceInstance object
-        Optional<ServerMicroserviceInstance> newServerMicroserviceInstance = ServerUtil.convertToServerMicroserviceInstance(mdnsService);
+        Optional<ServerMicroservice> newServerMicroserviceInstance = ServerUtil.convertToServerMicroserviceInstance(mdnsService);
 
         // add/update in-memory map
-        Map<String, ServerMicroserviceInstance> innerInstanceMap = ServerUtil.getServerMicroserviceInstanceMap().
+        Map<String, ServerMicroservice> innerInstanceMap = ServerUtil.getServerMicroserviceInstanceMap().
                 computeIfAbsent(serviceId, id -> new ConcurrentHashMap<>());
 
         // for Client to easily discover the instance's endpoints by serviceName
-        List<ServerMicroserviceInstance> innerInstanceByServiceNameList = ServerUtil.getserverMicroserviceInstanceMapByServiceName().
+        List<ServerMicroservice> innerInstanceByServiceNameList = ServerUtil.getserverMicroserviceInstanceMapByServiceName().
                 computeIfAbsent(serviceName, name -> new ArrayList<>());
         innerInstanceByServiceNameList.add(newServerMicroserviceInstance.get());
 
@@ -64,15 +64,15 @@ public class ZeroConfigRegistryService {
      * @param microserviceInstanceId
      */
     public void unregisterMicroserviceInstance(String microserviceId, String microserviceInstanceId) {
-        Map<String, ServerMicroserviceInstance> innerInstanceMap = ServerUtil.getServerMicroserviceInstanceMap().get(microserviceId);
+        Map<String, ServerMicroservice> innerInstanceMap = ServerUtil.getServerMicroserviceInstanceMap().get(microserviceId);
         if (innerInstanceMap != null && innerInstanceMap.containsKey(microserviceInstanceId)){
 
-            ServerMicroserviceInstance instanceToBeRemoved = innerInstanceMap.get(microserviceInstanceId);
+            ServerMicroservice instanceToBeRemoved = innerInstanceMap.get(microserviceInstanceId);
             innerInstanceMap.remove(microserviceInstanceId);
             LOGGER.info("Removed service instance from <serviceId, Map<instanceId, instance>>  Map with  microserviceInstanceId: {} ",  microserviceInstanceId);
 
             // Going to unregister a service instance {hostName=DESKTOP-Q2K46AO, instanceId=c19ddbd1, appId=springmvc-sample, serviceId=16e8633d, serviceName=springmvcConsumer, version=0.0.2, status=UP}
-            List<ServerMicroserviceInstance> innerInstanceByServiceNameList = ServerUtil.getserverMicroserviceInstanceMapByServiceName().get(instanceToBeRemoved.getServiceName());
+            List<ServerMicroservice> innerInstanceByServiceNameList = ServerUtil.getserverMicroserviceInstanceMapByServiceName().get(instanceToBeRemoved.getServiceName());
 
             if (innerInstanceByServiceNameList != null ){
                 innerInstanceByServiceNameList.removeIf(instance -> instance.getInstanceId().equals(microserviceInstanceId) && instance.getServiceId().equals(microserviceId));
@@ -91,8 +91,8 @@ public class ZeroConfigRegistryService {
      * @param instanceId
      * @return ServerMicroserviceInstance object
      */
-    public Optional<ServerMicroserviceInstance> findServiceInstance(String serviceId, String instanceId) {
-        Map<String, ServerMicroserviceInstance>  serverMicroserviceInstanceMap = ServerUtil.getServerMicroserviceInstanceMap().get(serviceId);
+    public Optional<ServerMicroservice> findServiceInstance(String serviceId, String instanceId) {
+        Map<String, ServerMicroservice>  serverMicroserviceInstanceMap = ServerUtil.getServerMicroserviceInstanceMap().get(serviceId);
         return serverMicroserviceInstanceMap != null ? Optional.ofNullable(serverMicroserviceInstanceMap.get(instanceId)) : Optional.empty();
     }
 
@@ -103,7 +103,7 @@ public class ZeroConfigRegistryService {
      * @param providerId
      * @return ServerMicroserviceInstance list
      */
-    public Optional<List<ServerMicroserviceInstance>> getMicroserviceInstance(String consumerId, String providerId) {
+    public Optional<List<ServerMicroservice>> getMicroserviceInstance(String consumerId, String providerId) {
         return Optional.ofNullable(ServerUtil.getserverMicroserviceInstanceMapByServiceName().get(providerId));
     }
 
@@ -114,7 +114,7 @@ public class ZeroConfigRegistryService {
      * @return boolean true/false
      */
     public boolean heartbeat(String microserviceId, String microserviceInstanceId) {
-        Map<String, ServerMicroserviceInstance>  serverMicroserviceInstanceMap = ServerUtil.getServerMicroserviceInstanceMap().get(microserviceId);
+        Map<String, ServerMicroservice>  serverMicroserviceInstanceMap = ServerUtil.getServerMicroserviceInstanceMap().get(microserviceId);
         return serverMicroserviceInstanceMap != null && serverMicroserviceInstanceMap.containsKey(microserviceInstanceId);
     }
 
