@@ -3,7 +3,7 @@ package org.apache.servicecomb.zeroconfigsc.server;
 import java.util.ArrayList;
 import java.util.List;
 
-public class ServerMicroservice {
+public class ServerMicroserviceInstance {
 
     private String appId;
 
@@ -23,7 +23,7 @@ public class ServerMicroservice {
 
     private String status;
 
-    public ServerMicroservice(){}
+    public ServerMicroserviceInstance(){}
 
     public void setAppId(String appId) {
         this.appId = appId;
