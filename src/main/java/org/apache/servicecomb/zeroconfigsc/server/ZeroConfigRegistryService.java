@@ -65,21 +65,21 @@ public class ZeroConfigRegistryService {
      */
     public void unregisterMicroserviceInstance(String microserviceId, String microserviceInstanceId) {
         Map<String, ServerMicroserviceInstance> innerInstanceMap = ZeroConfigRegistryServerUtil.getServerMicroserviceInstanceMap().get(microserviceId);
-
         if (innerInstanceMap != null && innerInstanceMap.containsKey(microserviceInstanceId)){
-            innerInstanceMap.remove(microserviceInstanceId);
 
             ServerMicroserviceInstance instanceToBeRemoved = innerInstanceMap.get(microserviceInstanceId);
-           // TODO TODO TODO TODO  java.lang.NullPointerExcepti
+            innerInstanceMap.remove(microserviceInstanceId);
+            LOGGER.info("Removed service instance from <serviceId, Map<instanceId, instance>>  Map with  microserviceInstanceId: {} ",  microserviceInstanceId);
+
             // Going to unregister a service instance {hostName=DESKTOP-Q2K46AO, instanceId=c19ddbd1, appId=springmvc-sample, serviceId=16e8633d, serviceName=springmvcConsumer, version=0.0.2, status=UP}
             List<ServerMicroserviceInstance> innerInstanceByServiceNameList = ZeroConfigRegistryServerUtil.getserverMicroserviceInstanceMapByServiceName().get(instanceToBeRemoved.getServiceName());
 
             if (innerInstanceByServiceNameList != null ){
                 innerInstanceByServiceNameList.removeIf(instance -> instance.getInstanceId().equals(microserviceInstanceId) && instance.getServiceId().equals(microserviceId));
+                LOGGER.info("Removed service instance from <serviceName, instanceList> map ",  microserviceInstanceId);
             }
-
         } else {
-            LOGGER.warn("ServiceId: {},  InstanceId: {} doesn't exist in server side", microserviceId, microserviceInstanceId);
+            LOGGER.warn("ServiceId: {},  InstanceId: {} doesn't exist in <serviceId, Map<instanceId, instance>> map", microserviceId, microserviceInstanceId);
         }
 
     }
