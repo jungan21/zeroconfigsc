@@ -104,7 +104,7 @@ public class ZeroConfigRegistryServerUtil {
                         // for debug start register
 
                     } else {
-                        LOGGER.error("Failed to register service instance. Because service: {} is null OR service's text attributes: {} is null", service, service.getTextAttributes());
+                        LOGGER.error("Failed to register service instance. Because service's text attributes: {} is null", service.getTextAttributes());
                     }
                 }
 

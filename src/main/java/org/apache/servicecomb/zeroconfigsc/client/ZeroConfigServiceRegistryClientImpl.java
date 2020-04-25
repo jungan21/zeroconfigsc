@@ -1,10 +1,8 @@
 package org.apache.servicecomb.zeroconfigsc.client;
 
-import static org.apache.servicecomb.zeroconfigsc.ZeroConfigRegistryConstants.MDNS_SERVICE_NAME_SUFFIX;
-import static org.apache.servicecomb.zeroconfigsc.ZeroConfigRegistryConstants.INSTANCE_HEARTBEAT_RESPONSE_MESSAGE_OK;
-
 import com.google.common.base.Charsets;
 import com.google.common.hash.Hashing;
+import net.posick.mDNS.Lookup;
 import net.posick.mDNS.MulticastDNSService;
 import net.posick.mDNS.ServiceInstance;
 import net.posick.mDNS.ServiceName;
@@ -23,7 +21,6 @@ import org.apache.servicecomb.serviceregistry.client.http.MicroserviceInstances;
 import org.apache.servicecomb.serviceregistry.config.ServiceRegistryConfig;
 import org.apache.servicecomb.serviceregistry.version.Version;
 import org.apache.servicecomb.serviceregistry.version.VersionRule;
-import org.apache.servicecomb.serviceregistry.version.VersionRuleUtils;
 import org.apache.servicecomb.serviceregistry.version.VersionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -32,6 +29,8 @@ import javax.ws.rs.core.Response;
 import java.io.IOException;
 import java.util.*;
 import java.util.stream.Collectors;
+
+import static org.apache.servicecomb.zeroconfigsc.ZeroConfigRegistryConstants.*;
 
 public class ZeroConfigServiceRegistryClientImpl implements ServiceRegistryClient {
     private static final Logger LOGGER = LoggerFactory.getLogger(ZeroConfigServiceRegistryClientImpl.class);
@@ -73,7 +72,7 @@ public class ZeroConfigServiceRegistryClientImpl implements ServiceRegistryClien
         // refer to the logic in LocalServiceRegistryClientImpl.java
         String serviceId = microservice.getServiceId();
         if (serviceId == null || serviceId.length() == 0){
-            serviceId = ZeroConfigRegistryClientUtil.generateServiceId(microservice);
+            serviceId = ZeroConfigRegistryClientUtil.generateServiceId(microservice.getAppId(), microservice.getServiceName());
         }
         // set to local variable so that it can be used to retrieve serviceName/appId/version when registering instance
         this.currentMicroservice = microservice;
@@ -82,7 +81,37 @@ public class ZeroConfigServiceRegistryClientImpl implements ServiceRegistryClien
 
     @Override
     public Microservice getMicroservice(String microserviceId) {
-        return this.currentMicroservice.getServiceId().equals(microserviceId) ? this.currentMicroservice : null;
+        if (this.currentMicroservice.getServiceId().equals(microserviceId)){
+            return this.currentMicroservice;
+        } else {
+            LOGGER.info("Start finding service from MDNS with microserviceId: {}", microserviceId);
+            Microservice service = new Microservice();
+            Lookup lookup = null;
+            try {
+                // have to do Fuzzy search as our service's key in MDNS is based on service name not the service Id
+                ServiceName mdnsServiceName  = new ServiceName(microserviceId + MDNS_SERVICE_NAME_SUFFIX);
+                lookup = new Lookup(mdnsServiceName);
+                ServiceInstance[] mdnsServices = lookup.lookupServices();
+                for (ServiceInstance mdnsService : mdnsServices) {
+                    if (mdnsService != null && mdnsService.getTextAttributes()!= null){
+                        LOGGER.info("find service from MDNS with attributes: {}", mdnsService.getTextAttributes().toString());
+                        service = ZeroConfigRegistryClientUtil.convertMDNSServiceToClientMicroservice(mdnsService);
+                        return service;
+                    }
+                }
+            } catch(IOException e){
+                LOGGER.error("Failed to create lookup object with error: {}", e);
+            } finally {
+                if (lookup != null) {
+                    try {
+                        lookup.close();
+                    } catch (IOException e1) {
+                        LOGGER.error("Failed to close lookup object with error: {}", e1);
+                    }
+                }
+            }
+            return service;
+        }
     }
 
     @Override
@@ -105,17 +134,25 @@ public class ZeroConfigServiceRegistryClientImpl implements ServiceRegistryClien
 
     @Override
     public boolean isSchemaExist(String microserviceId, String schemaId) {
+        LOGGER.info("isSchemaExist: microserviceId: {}, scehmaId: {}", microserviceId, schemaId);
         List<String> schemaList = this.currentMicroservice.getSchemas();
         return this.currentMicroservice.getServiceId().equals(microserviceId) && schemaList != null && schemaList.contains(schemaId);
     }
 
     @Override
     public boolean registerSchema(String microserviceId, String schemaId, String schemaContent) {
+        LOGGER.info("registerSchema: serviceId: {}, scehmaId: {}, SchemaContent: {}", microserviceId, schemaId, schemaContent);
+
+        if (this.currentMicroservice != null && microserviceId.equals(this.currentMicroservice.getServiceId())) {
+            this.currentMicroservice.getSchemaMap().put(schemaId, schemaContent);
+        }
+
         return true;
     }
 
     @Override
     public String getSchema(String microserviceId, String schemaId) {
+        LOGGER.info("getSchema: microserviceId: {}, scehmaId: {}", microserviceId, schemaId);
         Microservice microservice = this.getMicroservice(microserviceId);
         if (microservice == null) {
             LOGGER.error("Invalid serviceId! Failed to retrieve microservice for serviceId {}", microserviceId);
@@ -126,6 +163,7 @@ public class ZeroConfigServiceRegistryClientImpl implements ServiceRegistryClien
 
     @Override
     public String getAggregatedSchema(String microserviceId, String schemaId) {
+        LOGGER.info("getAggregatedSchema: microserviceId: {}, scehmaId: {}", microserviceId, schemaId);
         return this.getSchema(microserviceId, schemaId);
     }
 
@@ -209,25 +247,14 @@ public class ZeroConfigServiceRegistryClientImpl implements ServiceRegistryClien
 
     @Override
     public boolean unregisterMicroserviceInstance(String microserviceId, String microserviceInstanceId) {
-        Optional<ServerMicroserviceInstance> optionalServerMicroserviceInstance =  this.zeroConfigRegistryService.findServiceInstance(microserviceId, microserviceInstanceId);
-
-        if (optionalServerMicroserviceInstance.isPresent()) {
-            try {
-                // convention to append "._http._tcp.local."
-                LOGGER.info("Start unregister microservice instance. The instance with servcieId: {} instanceId:{}", microserviceId, microserviceInstanceId);
-                ServiceName mdnsServiceName = new ServiceName(optionalServerMicroserviceInstance.get().getServiceName() + MDNS_SERVICE_NAME_SUFFIX);
-                // broadcast to MDNS
-                return this.multicastDNSService.unregister(mdnsServiceName);
-            } catch (IOException e) {
-                LOGGER.error("Failed to unregister microservice instance from mdns server. servcieId: {} instanceId:{}", microserviceId, microserviceInstanceId,  e);
-                return false;
-            }
-
-        } else {
-            LOGGER.error("Failed to unregister microservice instance from mdns server. The instance with servcieId: {} instanceId:{} doesn't exist in MDNS server", microserviceId, microserviceInstanceId);
+        try {
+            LOGGER.info("Start unregister microservice instance. The instance with servcieId: {} instanceId:{}", microserviceId, microserviceInstanceId);
+            ServiceName mdnsServiceName = new ServiceName(microserviceId + MDNS_SERVICE_NAME_SUFFIX);
+            return this.multicastDNSService.unregister(mdnsServiceName); // broadcast to MDNS
+        } catch (IOException e) {
+            LOGGER.error("Failed to unregister microservice instance from mdns server. servcieId: {} instanceId:{}", microserviceId, microserviceInstanceId,  e);
             return false;
         }
-
     }
 
     @Override
@@ -257,42 +284,45 @@ public class ZeroConfigServiceRegistryClientImpl implements ServiceRegistryClien
 
     @Override
     public MicroserviceInstances findServiceInstances(String consumerId, String appId, String serviceName, String strVersionRule, String revision) {
-        int currentRevision = 1;
+        LOGGER.info("find service instance for consumerId: {}, serviceName: {}, versionRule: {}, revision: {}", consumerId,serviceName, strVersionRule, revision);
+        /**
+         *  1. consumerId not the provider service Id
+         *  2. called by RefreshableMicroserviceCache.pullInstanceFromServiceCenter when consumer make a call to service provider for the first time
+         *
+         *  strVersionRule: "0.0.0.0+", revision： null
+         *
+         *  currently, returnall instance
+         */
 
-        List<MicroserviceInstance> allInstances = new ArrayList<>();
-        MicroserviceInstances microserviceInstances = new MicroserviceInstances();
+        MicroserviceInstances resultMicroserviceInstances = new MicroserviceInstances();
         FindInstancesResponse response = new FindInstancesResponse();
-        if (revision != null && currentRevision == Integer.parseInt(revision)) {
-            microserviceInstances.setNeedRefresh(false);
-            return microserviceInstances;
-        }
+        List<MicroserviceInstance> instanceList = new ArrayList<>();
 
-        microserviceInstances.setRevision(String.valueOf(currentRevision));
-        VersionRule versionRule = VersionRuleUtils.getOrCreate(strVersionRule);
-        Microservice latestMicroservice = findLatest(appId, serviceName, versionRule);
-        if (latestMicroservice == null) {
-            microserviceInstances.setMicroserviceNotExist(true);
-            return microserviceInstances;
-        }
-
-        Version latestVersion = VersionUtils.getOrCreate(latestMicroservice.getVersion());
-        for (Microservice microservice : this.getAllMicroservices()) {
-            if (!isSameMicroservice(microservice, appId, serviceName)) {
-                continue;
+        Lookup lookup = null;
+        try {
+            ServiceName mdnsServiceName  = new ServiceName(ZeroConfigRegistryClientUtil.generateServiceId(appId, serviceName) + MDNS_SERVICE_NAME_SUFFIX);
+            lookup = new Lookup(mdnsServiceName);
+            ServiceInstance[] mdnsServices = lookup.lookupServices();
+            for (ServiceInstance mdnsService : mdnsServices) {
+                LOGGER.info("find service instance from MDNS with attributes: {}", mdnsService.getTextAttributes().toString());
+                instanceList.add(ZeroConfigRegistryClientUtil.convertMDNSServiceToClientMicroserviceInstance(mdnsService));
             }
-
-            Version version = VersionUtils.getOrCreate(microservice.getVersion());
-            if (!versionRule.isMatch(version, latestVersion)) {
-                continue;
+        } catch(IOException e){
+            LOGGER.error("Failed to create lookup object with error: {}", e);
+        } finally {
+            if (lookup != null) {
+                try {
+                    lookup.close();
+                } catch (IOException e1) {
+                    LOGGER.error("Failed to close lookup object with error: {}", e1);
+                }
             }
-
-            List<MicroserviceInstance> microserviceInstanceList = this.getMicroserviceInstance(null, microservice.getServiceId());
-            allInstances.addAll(microserviceInstanceList);
         }
-        response.setInstances(allInstances);
-        microserviceInstances.setInstancesResponse(response);
 
-        return microserviceInstances;
+        response.setInstances(instanceList);
+        resultMicroserviceInstances.setInstancesResponse(response);
+
+        return resultMicroserviceInstances;
     }
 
 

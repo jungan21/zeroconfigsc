@@ -70,6 +70,8 @@ public class ZeroConfigRegistryService {
             innerInstanceMap.remove(microserviceInstanceId);
 
             ServerMicroserviceInstance instanceToBeRemoved = innerInstanceMap.get(microserviceInstanceId);
+           // TODO TODO TODO TODO  java.lang.NullPointerExcepti
+            // Going to unregister a service instance {hostName=DESKTOP-Q2K46AO, instanceId=c19ddbd1, appId=springmvc-sample, serviceId=16e8633d, serviceName=springmvcConsumer, version=0.0.2, status=UP}
             List<ServerMicroserviceInstance> innerInstanceByServiceNameList = ZeroConfigRegistryServerUtil.getserverMicroserviceInstanceMapByServiceName().get(instanceToBeRemoved.getServiceName());
 
             if (innerInstanceByServiceNameList != null ){

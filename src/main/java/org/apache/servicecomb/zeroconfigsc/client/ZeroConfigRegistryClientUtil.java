@@ -1,18 +1,5 @@
 package org.apache.servicecomb.zeroconfigsc.client;
 
-import static org.apache.servicecomb.zeroconfigsc.ZeroConfigRegistryConstants.APP_ID;
-import static org.apache.servicecomb.zeroconfigsc.ZeroConfigRegistryConstants.SERVICE_ID;
-import static org.apache.servicecomb.zeroconfigsc.ZeroConfigRegistryConstants.SERVICE_NAME;
-import static org.apache.servicecomb.zeroconfigsc.ZeroConfigRegistryConstants.VERSION;
-import static org.apache.servicecomb.zeroconfigsc.ZeroConfigRegistryConstants.STATUS;
-import static org.apache.servicecomb.zeroconfigsc.ZeroConfigRegistryConstants.ENDPOINTS;
-import static org.apache.servicecomb.zeroconfigsc.ZeroConfigRegistryConstants.HOST_NAME;
-import static org.apache.servicecomb.zeroconfigsc.ZeroConfigRegistryConstants.MDNS_SERVICE_NAME_SUFFIX;
-import static org.apache.servicecomb.zeroconfigsc.ZeroConfigRegistryConstants.MDNS_HOST_NAME_SUFFIX;
-import static org.apache.servicecomb.zeroconfigsc.ZeroConfigRegistryConstants.INSTANCE_ID;
-import static org.apache.servicecomb.zeroconfigsc.ZeroConfigRegistryConstants.SCHEMA_ENDPOINT_LIST_SPLITER;
-import static org.apache.servicecomb.zeroconfigsc.ZeroConfigRegistryConstants.UUID_SPLITER;
-
 import net.posick.mDNS.ServiceInstance;
 import net.posick.mDNS.ServiceName;
 import org.apache.servicecomb.zeroconfigsc.server.ServerMicroserviceInstance;
@@ -29,13 +16,17 @@ import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.*;
 
+import static org.apache.servicecomb.zeroconfigsc.ZeroConfigRegistryConstants.*;
+
 public class ZeroConfigRegistryClientUtil {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ZeroConfigRegistryClientUtil.class);
 
     public static Optional<ServiceInstance> convertToMDNSServiceInstance(String serviceId, String microserviceInstanceId, MicroserviceInstance microserviceInstance, IpPortManager ipPortManager, Microservice microservice) {
         try {
-            ServiceName serviceName = new ServiceName( microservice.getServiceName() + MDNS_SERVICE_NAME_SUFFIX);
+
+            // have to use service id , as  getMicroservice(serviceId) is based on the id
+            ServiceName serviceName = new ServiceName( microservice.getServiceId() + MDNS_SERVICE_NAME_SUFFIX);
             IpPort ipPort = ipPortManager.getAvailableAddress();
             InetAddress[] addresses = new InetAddress[] {InetAddress.getByName(ipPort.getHostOrIp())};
 
@@ -83,12 +74,51 @@ public class ZeroConfigRegistryClientUtil {
         return microserviceInstance;
     }
 
-    public static String generateServiceId(Microservice microservice){
-        String serviceIdStringIndex = String.join("/", microservice.getAppId(), microservice.getServiceName(), microservice.getVersion());
+
+    public static Microservice convertMDNSServiceToClientMicroservice(ServiceInstance mdnsService) {
+        Microservice microservice = new Microservice();
+        Map<String, String> mdnsServiceAttributeMap = mdnsService.getTextAttributes();
+        microservice.setAppId(mdnsServiceAttributeMap.get(APP_ID));
+        microservice.setServiceId(mdnsServiceAttributeMap.get(SERVICE_ID));
+        microservice.setServiceName(mdnsServiceAttributeMap.get(SERVICE_NAME));
+        microservice.setVersion(mdnsServiceAttributeMap.get(VERSION));
+        microservice.setStatus(mdnsServiceAttributeMap.get(STATUS));
+        return microservice;
+    }
+
+    public static MicroserviceInstance convertMDNSServiceToClientMicroserviceInstance(ServiceInstance mdnsServiceInstance) {
+        MicroserviceInstance microserviceInstance = new MicroserviceInstance();
+
+        if (mdnsServiceInstance != null && mdnsServiceInstance.getTextAttributes() != null) {
+            Map<String, String> mdnsInstanceAttributeMap = mdnsServiceInstance.getTextAttributes();
+            microserviceInstance.setServiceId(mdnsInstanceAttributeMap.get(SERVICE_ID));
+            microserviceInstance.setInstanceId(mdnsInstanceAttributeMap.get(INSTANCE_ID));
+            microserviceInstance.setHostName(mdnsInstanceAttributeMap.get(HOST_NAME));
+            microserviceInstance.setStatus(MicroserviceInstanceStatus.valueOf(mdnsInstanceAttributeMap.get(STATUS)));
+
+            List<String> endpointList = new ArrayList<>();
+            String endpoints = mdnsInstanceAttributeMap.get(ENDPOINTS);
+            if (endpoints != null) {
+                // means only single endpoint
+                if (!endpoints.contains(SCHEMA_ENDPOINT_LIST_SPLITER)){
+                    endpointList.add(endpoints);
+                } else {
+                    endpointList.addAll(Arrays.asList( endpoints.split("\\$")));
+                }
+            }
+            microserviceInstance.setEndpoints(endpointList);
+        }
+        return microserviceInstance;
+    }
+
+    public static String generateServiceId(String appId, String serviceName){
+        String serviceIdStringIndex = String.join("/", appId, serviceName);
         return UUID.nameUUIDFromBytes(serviceIdStringIndex.getBytes()).toString().split(UUID_SPLITER)[0];
     }
 
     public static String generateServiceInstanceId(MicroserviceInstance microserviceInstance){
         return UUID.randomUUID().toString().split(UUID_SPLITER)[0];
     }
+
+
 }
