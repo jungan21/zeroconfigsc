@@ -19,6 +19,7 @@ public interface ZeroConfigRegistryConstants {
     String VERSION = "version";
     String SERVICE_ID = "serviceId";
     String STATUS = "status";
+    String SCHEMA_IDS = "schemas";
 
     // Microservice Instance Attributes
     String INSTANCE_ID = "instanceId";

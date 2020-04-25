@@ -18,9 +18,9 @@ import java.util.*;
 
 import static org.apache.servicecomb.zeroconfigsc.ZeroConfigRegistryConstants.*;
 
-public class ZeroConfigRegistryClientUtil {
+public class ClientUtil {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(ZeroConfigRegistryClientUtil.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(ClientUtil.class);
 
     public static Optional<ServiceInstance> convertToMDNSServiceInstance(String serviceId, String microserviceInstanceId, MicroserviceInstance microserviceInstance, IpPortManager ipPortManager, Microservice microservice) {
         try {
@@ -42,17 +42,28 @@ public class ZeroConfigRegistryClientUtil {
             serviceInstanceTextAttributesMap.put(HOST_NAME, hostName);
             Name mdnsHostName = new Name(hostName + MDNS_HOST_NAME_SUFFIX);
 
-
-            // use special spliter for schema list otherwise, MDNS can't parse the string list properly i.e.  [schema1, schema2]
-            // schema1$schema2
-            List<String> endpoints = microserviceInstance.getEndpoints();
-            StringBuilder sb = new StringBuilder();
-            if ( endpoints != null && !endpoints.isEmpty()) {
-                for (String endpoint : endpoints) {
-                    sb.append(endpoint + SCHEMA_ENDPOINT_LIST_SPLITER);
+            // use special spliter for schema list otherwise, MDNS can't parse the string list properly i.e.  [schemaId1, schemaId2]
+            // schemaId1$schemaId2
+            List<String> schemaIdList = microservice.getSchemas();
+            StringBuilder schemasSB = new StringBuilder();
+            if ( schemaIdList != null && !schemaIdList.isEmpty()) {
+                for (String schemaId : schemaIdList) {
+                    schemasSB.append(schemaId + SCHEMA_ENDPOINT_LIST_SPLITER);
                 }
                 // remove the last $
-                serviceInstanceTextAttributesMap.put(ENDPOINTS,sb.toString().substring(0, sb.toString().length()-1));
+                serviceInstanceTextAttributesMap.put(SCHEMA_IDS,schemasSB.toString().substring(0, schemasSB.toString().length()-1));
+            }
+
+            // use special spliter for schema list otherwise, MDNS can't parse the string list properly i.e.  [endpoint1, endpoint1]
+            // endpoint1$endpoint2
+            List<String> endpoints = microserviceInstance.getEndpoints();
+            StringBuilder endpointsSB = new StringBuilder();
+            if ( endpoints != null && !endpoints.isEmpty()) {
+                for (String endpoint : endpoints) {
+                    endpointsSB.append(endpoint + SCHEMA_ENDPOINT_LIST_SPLITER);
+                }
+                // remove the last $
+                serviceInstanceTextAttributesMap.put(ENDPOINTS,endpointsSB.toString().substring(0, endpointsSB.toString().length()-1));
             }
 
             return Optional.of(new ServiceInstance(serviceName, 0, 0, ipPort.getPort(), mdnsHostName, addresses, serviceInstanceTextAttributesMap));
@@ -83,6 +94,18 @@ public class ZeroConfigRegistryClientUtil {
         microservice.setServiceName(mdnsServiceAttributeMap.get(SERVICE_NAME));
         microservice.setVersion(mdnsServiceAttributeMap.get(VERSION));
         microservice.setStatus(mdnsServiceAttributeMap.get(STATUS));
+
+        List<String> schemaIdList = new ArrayList<>();
+        String schemaIds = mdnsServiceAttributeMap.get(SCHEMA_IDS);
+        if (schemaIds != null) {
+            // means only single endpoint
+            if (!schemaIds.contains(SCHEMA_ENDPOINT_LIST_SPLITER)){
+                schemaIdList.add(schemaIds);
+            } else {
+                schemaIdList.addAll(Arrays.asList( schemaIds.split("\\$")));
+            }
+            microservice.setSchemas(schemaIdList);
+        }
         return microservice;
     }
 
@@ -105,8 +128,8 @@ public class ZeroConfigRegistryClientUtil {
                 } else {
                     endpointList.addAll(Arrays.asList( endpoints.split("\\$")));
                 }
+                microserviceInstance.setEndpoints(endpointList);
             }
-            microserviceInstance.setEndpoints(endpointList);
         }
         return microserviceInstance;
     }

@@ -22,9 +22,9 @@ import java.util.concurrent.ExecutorService;
 
 import static org.apache.servicecomb.zeroconfigsc.ZeroConfigRegistryConstants.*;
 
-public class ZeroConfigRegistryServerUtil {
+public class ServerUtil {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(ZeroConfigRegistryServerUtil.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(ServerUtil.class);
 
     private static ZeroConfigRegistryService zeroConfigRegistryService;
 
@@ -97,9 +97,9 @@ public class ZeroConfigRegistryServerUtil {
                         LOGGER.info("Microservice Instance is registered to MDNS server {}", serviceTextAttributesMap);
 
                         // for debug start register
-                        Map<String, Map<String, ServerMicroserviceInstance>> instanceMap = ZeroConfigRegistryServerUtil.getServerMicroserviceInstanceMap();
+                        Map<String, Map<String, ServerMicroserviceInstance>> instanceMap = ServerUtil.getServerMicroserviceInstanceMap();
                         System.out.println("Jun Debug instanceMap register: " + instanceMap);
-                        Map<String, List<ServerMicroserviceInstance>> instanceByNameMap = ZeroConfigRegistryServerUtil.getserverMicroserviceInstanceMapByServiceName();
+                        Map<String, List<ServerMicroserviceInstance>> instanceByNameMap = ServerUtil.getserverMicroserviceInstanceMapByServiceName();
                         System.out.println("Jun Debug instanceByNameMap register: " + instanceByNameMap);
                         // for debug start register
 
@@ -117,9 +117,9 @@ public class ZeroConfigRegistryServerUtil {
                         LOGGER.info("Microservice Instance is unregistered from MDNS server {}", service.getTextAttributes());
 
                         // for debug start unregister
-                        Map<String, Map<String, ServerMicroserviceInstance>> instanceMap = ZeroConfigRegistryServerUtil.getServerMicroserviceInstanceMap();
+                        Map<String, Map<String, ServerMicroserviceInstance>> instanceMap = ServerUtil.getServerMicroserviceInstanceMap();
                         System.out.println("Jun Debug instanceMap unregister: " + instanceMap);
-                        Map<String, List<ServerMicroserviceInstance>> instanceByNameMap = ZeroConfigRegistryServerUtil.getserverMicroserviceInstanceMapByServiceName();
+                        Map<String, List<ServerMicroserviceInstance>> instanceByNameMap = ServerUtil.getserverMicroserviceInstanceMapByServiceName();
                         System.out.println("Jun Debug instanceByNameMap unregister: " + instanceByNameMap);
                         // for debug start unregister
                     } else {
