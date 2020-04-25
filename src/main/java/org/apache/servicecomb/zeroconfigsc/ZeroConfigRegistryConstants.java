@@ -1,12 +1,8 @@
 package org.apache.servicecomb.zeroconfigsc;
 
 public interface ZeroConfigRegistryConstants {
-    
-    // MulticastSocket related
-    String GROUP  = "225.0.0.0";
-    Integer PORT = 6666;
 
-    // MDNS Related
+    // MDNS Related discover branch
     String MDNS_SERVICE_NAME_SUFFIX = "._http._tcp.local.";
     String MDNS_HOST_NAME_SUFFIX = ".local.";
     String[] DISCOVER_SERVICE_TYPES = new String[]
@@ -29,11 +25,8 @@ public interface ZeroConfigRegistryConstants {
     String ENDPOINTS = "endpoints";
     String HOST_NAME = "hostName";
     String INSTANCE_HEARTBEAT_RESPONSE_MESSAGE_OK = "OK";
-    String ENDPOINT_PREFIX_REST = "rest";
-    String ENDPOINT_PREFIX_HTTP = "http";
 
     //others
-    String SPLITER_MAP_KEY_VALUE = "=";
     String SCHEMA_ENDPOINT_LIST_SPLITER = "$";
     String UUID_SPLITER = "-";
 }
