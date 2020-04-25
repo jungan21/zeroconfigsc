@@ -12,7 +12,6 @@ import java.util.Map;
 /**
  * facade class for consumer to discover the service provider
  */
-import static org.apache.servicecomb.zeroconfigsc.ZeroConfigRegistryConstants.*;
 
 public class ZeroConfigServiceRegistryFacade {
 
