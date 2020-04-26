@@ -22,6 +22,17 @@ public class ClientUtil {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ClientUtil.class);
 
+    // serve as the buffer to store current registered microservice itself
+    public static Microservice microserviceItSelf = new Microservice();
+
+    public static Microservice getMicroserviceItSelf() {
+        return microserviceItSelf;
+    }
+
+    public static void setMicroserviceItSelf(Microservice microserviceItSelf) {
+        ClientUtil.microserviceItSelf = microserviceItSelf;
+    }
+
     public static Optional<ServiceInstance> convertToMDNSServiceInstance(String serviceId, String microserviceInstanceId, MicroserviceInstance microserviceInstance, IpPortManager ipPortManager, Microservice microservice) {
         try {
 

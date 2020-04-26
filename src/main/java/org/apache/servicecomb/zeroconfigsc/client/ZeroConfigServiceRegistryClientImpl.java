@@ -6,7 +6,6 @@ import net.posick.mDNS.Lookup;
 import net.posick.mDNS.MulticastDNSService;
 import net.posick.mDNS.ServiceInstance;
 import net.posick.mDNS.ServiceName;
-import org.apache.servicecomb.provider.rest.common.RestSchema;
 import org.apache.servicecomb.zeroconfigsc.server.ZeroConfigRegistryService;
 import org.apache.servicecomb.zeroconfigsc.server.ServerMicroserviceInstance;
 import org.apache.servicecomb.foundation.vertx.AsyncResultCallback;
@@ -20,16 +19,9 @@ import org.apache.servicecomb.serviceregistry.client.ServiceRegistryClient;
 import org.apache.servicecomb.serviceregistry.client.http.Holder;
 import org.apache.servicecomb.serviceregistry.client.http.MicroserviceInstances;
 import org.apache.servicecomb.serviceregistry.config.ServiceRegistryConfig;
-import org.apache.servicecomb.serviceregistry.version.Version;
-import org.apache.servicecomb.serviceregistry.version.VersionRule;
-import org.apache.servicecomb.serviceregistry.version.VersionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestMethod;
-import org.springframework.web.bind.annotation.RequestParam;
 
-import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import java.io.IOException;
 import java.util.*;
@@ -38,15 +30,12 @@ import org.springframework.web.client.RestTemplate;
 
 import static org.apache.servicecomb.zeroconfigsc.ZeroConfigRegistryConstants.*;
 
-@RestSchema(schemaId = SCHEMA_CONTENT_ENDPOINT)
-@RequestMapping(path = SCHEMA_CONTENT_ENDPOINT_BASE_PATH)
 public class ZeroConfigServiceRegistryClientImpl implements ServiceRegistryClient {
     private static final Logger LOGGER = LoggerFactory.getLogger(ZeroConfigServiceRegistryClientImpl.class);
 
     private IpPortManager ipPortManager;
     private MulticastDNSService multicastDNSService;
     private ZeroConfigRegistryService zeroConfigRegistryService;
-    private Microservice microserviceItSelf;
 
     public ZeroConfigServiceRegistryClientImpl(ServiceRegistryConfig serviceRegistryConfig){
         this.ipPortManager = new IpPortManager(serviceRegistryConfig);
@@ -57,12 +46,6 @@ public class ZeroConfigServiceRegistryClientImpl implements ServiceRegistryClien
         }
         // for query ONLY, for update, we have to broadcast
         this.zeroConfigRegistryService = new ZeroConfigRegistryService();
-    }
-
-    // each service expose its endpoint for others(consumers) to retrieve its schema content
-    @RequestMapping(path = SCHEMA_CONTENT_ENDPOINT_SUBPATH, produces = MediaType.APPLICATION_JSON, method = RequestMethod.POST )
-    public String getSchemaEndpoint(@RequestParam(name = SCHEMA_CONTENT_ENDPOINT_QUERY_KEYWORD) String schemaId) {
-        return this.microserviceItSelf.getSchemaMap().computeIfPresent(schemaId,  (k, v) -> { return v; });
     }
 
     @Override
@@ -78,7 +61,7 @@ public class ZeroConfigServiceRegistryClientImpl implements ServiceRegistryClien
     // this method is called before Microservice registration to check whether service with this ID exists or not
     @Override
     public String getMicroserviceId(String appId, String microserviceName, String versionRule, String environment) {
-        return this.microserviceItSelf != null ? this.microserviceItSelf.getServiceId() : null;
+        return ClientUtil.microserviceItSelf != null ? ClientUtil.microserviceItSelf.getServiceId() : null;
     }
 
     @Override
@@ -89,15 +72,15 @@ public class ZeroConfigServiceRegistryClientImpl implements ServiceRegistryClien
             serviceId = ClientUtil.generateServiceId(microservice.getAppId(), microservice.getServiceName());
         }
         // set to local variable so that it can be used to retrieve serviceName/appId/version when registering instance
-        this.microserviceItSelf = microservice;
+        ClientUtil.setMicroserviceItSelf(microservice);
         return serviceId;
     }
 
     // add loop up because this is also called by consumer to discover provider service
     @Override
     public Microservice getMicroservice(String microserviceId) {
-        if (this.microserviceItSelf.getServiceId().equals(microserviceId)){
-            return this.microserviceItSelf;
+        if (ClientUtil.microserviceItSelf.getServiceId().equals(microserviceId)){
+            return ClientUtil.getMicroserviceItSelf();
         } else {
             LOGGER.info("Start finding service from MDNS with microserviceId: {}", microserviceId);
             Microservice service = new Microservice();
@@ -149,17 +132,18 @@ public class ZeroConfigServiceRegistryClientImpl implements ServiceRegistryClien
     @Override
     public boolean isSchemaExist(String microserviceId, String schemaId) {
         LOGGER.info("isSchemaExist: microserviceId: {}, scehmaId: {}", microserviceId, schemaId);
-        List<String> schemaList = this.microserviceItSelf.getSchemas();
-        return this.microserviceItSelf.getServiceId().equals(microserviceId) && schemaList != null && schemaList.contains(schemaId);
+        Microservice currentMicroservice = ClientUtil.getMicroserviceItSelf();
+        List<String> schemaList = currentMicroservice.getSchemas();
+        return currentMicroservice.getServiceId().equals(microserviceId) && schemaList != null && schemaList.contains(schemaId);
     }
 
     @Override
     public boolean registerSchema(String microserviceId, String schemaId, String schemaContent) {
         LOGGER.info("registerSchema: serviceId: {}, scehmaId: {}, SchemaContent: {}", microserviceId, schemaId, schemaContent);
 
-        if (this.microserviceItSelf != null && microserviceId.equals(this.microserviceItSelf.getServiceId())) {
+        if (ClientUtil.getMicroserviceItSelf() != null && microserviceId.equals(ClientUtil.getMicroserviceItSelf().getServiceId())) {
             // put to both schemaMap and schemaIdList
-            this.microserviceItSelf.addSchema(schemaId, schemaContent);
+            ClientUtil.getMicroserviceItSelf().addSchema(schemaId, schemaContent);
             return true;
         } else {
             LOGGER.error("Invalid serviceId! Failed to retrieve Microservice for serviceId {}", microserviceId);
@@ -171,8 +155,8 @@ public class ZeroConfigServiceRegistryClientImpl implements ServiceRegistryClien
     @Override
     public String getSchema(String microserviceId, String schemaId) {
         LOGGER.info("getSchema: microserviceId: {}, scehmaId: {}", microserviceId, schemaId);
-        if (this.microserviceItSelf.getServiceId().equals(microserviceId)) {
-            return this.microserviceItSelf.getSchemaMap().computeIfPresent(schemaId,  (k, v) -> { return v; });
+        if (ClientUtil.getMicroserviceItSelf().getServiceId().equals(microserviceId)) {
+            return  ClientUtil.getMicroserviceItSelf().getSchemaMap().computeIfPresent(schemaId,  (k, v) -> { return v; });
         } else {
            // called by consumer to load provider's schema content (very first time)
             String endpoint = this.getEndpointForMicroservice(microserviceId);
@@ -231,12 +215,12 @@ public class ZeroConfigServiceRegistryClientImpl implements ServiceRegistryClien
     public Holder<List<GetSchemaResponse>> getSchemas(String microserviceId) {
         // this method is called in MicroserviceRegisterTask.java doRegister()
         Holder<List<GetSchemaResponse>> resultHolder = new Holder<>();
-        if (microserviceItSelf == null) {
+        if (ClientUtil.getMicroserviceItSelf() == null) {
             LOGGER.error("Invalid serviceId! Failed to retrieve microservice for serviceId {}", microserviceId);
             return resultHolder;
         }
         List<GetSchemaResponse> schemas = new ArrayList<>();
-        microserviceItSelf.getSchemaMap().forEach((key, val) -> {
+        ClientUtil.getMicroserviceItSelf().getSchemaMap().forEach((key, val) -> {
             GetSchemaResponse schema = new GetSchemaResponse();
             schema.setSchema(val);
             schema.setSchemaId(key);
@@ -257,7 +241,8 @@ public class ZeroConfigServiceRegistryClientImpl implements ServiceRegistryClien
 
         try {
             // need currentMicroservice object to retrieve serviceName/appID/version attributes for instance to be registered
-            Optional<ServiceInstance> optionalServiceInstance = ClientUtil.convertToMDNSServiceInstance(serviceId, instanceId, instance, this.ipPortManager, this.microserviceItSelf);
+            Optional<ServiceInstance> optionalServiceInstance = ClientUtil.convertToMDNSServiceInstance(serviceId, instanceId, instance,
+                    this.ipPortManager,  ClientUtil.getMicroserviceItSelf());
 
             if (optionalServiceInstance.isPresent()){
                 this.multicastDNSService.register(optionalServiceInstance.get()); // broadcast to MDNS
@@ -383,29 +368,6 @@ public class ZeroConfigServiceRegistryClientImpl implements ServiceRegistryClien
         resultMicroserviceInstances.setInstancesResponse(response);
 
         return resultMicroserviceInstances;
-    }
-
-
-
-    private Microservice findLatest(String appId, String serviceName, VersionRule versionRule) {
-        Version latestVersion = null;
-        Microservice latest = null;
-        List<Microservice> microserviceList = this.getAllMicroservices();
-        for (Microservice microservice : microserviceList) {
-            if (!isSameMicroservice(microservice, appId, serviceName)) {
-                continue;
-            }
-            Version version = VersionUtils.getOrCreate(microservice.getVersion());
-            if (!versionRule.isAccept(version)) {
-                continue;
-            }
-            if (latestVersion == null || version.compareTo(latestVersion) > 0) {
-                latestVersion = version;
-                latest = microservice;
-            }
-        }
-
-        return latest;
     }
 
     private boolean isSameMicroservice(Microservice microservice, String appId, String serviceName) {
