@@ -6,6 +6,7 @@ import net.posick.mDNS.Lookup;
 import net.posick.mDNS.MulticastDNSService;
 import net.posick.mDNS.ServiceInstance;
 import net.posick.mDNS.ServiceName;
+import org.apache.servicecomb.provider.rest.common.RestSchema;
 import org.apache.servicecomb.zeroconfigsc.server.ZeroConfigRegistryService;
 import org.apache.servicecomb.zeroconfigsc.server.ServerMicroserviceInstance;
 import org.apache.servicecomb.foundation.vertx.AsyncResultCallback;
@@ -24,14 +25,21 @@ import org.apache.servicecomb.serviceregistry.version.VersionRule;
 import org.apache.servicecomb.serviceregistry.version.VersionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.web.bind.annotation.RequestParam;
 
+import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import java.io.IOException;
 import java.util.*;
 import java.util.stream.Collectors;
+import org.springframework.web.client.RestTemplate;
 
 import static org.apache.servicecomb.zeroconfigsc.ZeroConfigRegistryConstants.*;
 
+@RestSchema(schemaId = SCHEMA_CONTENT_ENDPOINT)
+@RequestMapping(path = SCHEMA_CONTENT_ENDPOINT_BASE_PATH)
 public class ZeroConfigServiceRegistryClientImpl implements ServiceRegistryClient {
     private static final Logger LOGGER = LoggerFactory.getLogger(ZeroConfigServiceRegistryClientImpl.class);
 
@@ -49,6 +57,12 @@ public class ZeroConfigServiceRegistryClientImpl implements ServiceRegistryClien
         }
         // for query ONLY, for update, we have to broadcast
         this.zeroConfigRegistryService = new ZeroConfigRegistryService();
+    }
+
+    // each service expose its endpoint for others(consumers) to retrieve its schema content
+    @RequestMapping(path = SCHEMA_CONTENT_ENDPOINT_SUBPATH, produces = MediaType.APPLICATION_JSON, method = RequestMethod.POST )
+    public String getSchemaEndpoint(@RequestParam(name = SCHEMA_CONTENT_ENDPOINT_QUERY_KEYWORD) String schemaId) {
+        return this.microserviceItSelf.getSchemaMap().computeIfPresent(schemaId,  (k, v) -> { return v; });
     }
 
     @Override
@@ -89,7 +103,6 @@ public class ZeroConfigServiceRegistryClientImpl implements ServiceRegistryClien
             Microservice service = new Microservice();
             Lookup lookup = null;
             try {
-                // have to do Fuzzy search as our service's key in MDNS is based on service name not the service Id
                 ServiceName mdnsServiceName  = new ServiceName(microserviceId + MDNS_SERVICE_NAME_SUFFIX);
                 lookup = new Lookup(mdnsServiceName);
                 ServiceInstance[] mdnsServices = lookup.lookupServices();
@@ -154,19 +167,57 @@ public class ZeroConfigServiceRegistryClientImpl implements ServiceRegistryClien
         }
     }
 
-    // TODO TODO TODO need to call provider to retrieve provider schema content direclty for consumder to be able to discover the porovider
+    // getSchema is also called by service registration task when registering itself
     @Override
     public String getSchema(String microserviceId, String schemaId) {
         LOGGER.info("getSchema: microserviceId: {}, scehmaId: {}", microserviceId, schemaId);
         if (this.microserviceItSelf.getServiceId().equals(microserviceId)) {
-            return this.microserviceItSelf.getSchemaMap().get(schemaId);
+            return this.microserviceItSelf.getSchemaMap().computeIfPresent(schemaId,  (k, v) -> { return v; });
         } else {
-            //called by consumer to load provider's schema content (very first time)
-            // have to discover provider's endpoint and make a call to load schema from provider side directly
-            // Currently, just return its own schemaContent, have to be able to retrieve provider's schema later
-            return microserviceItSelf.getSchemaMap() != null ? microserviceItSelf.getSchemaMap().get(schemaId) : null;
+           // called by consumer to load provider's schema content (very first time)
+            String endpoint = this.getEndpointForMicroservice(microserviceId);
+            LOGGER.info("Found the endpoint: {} for the microserviceId: {}", endpoint, microserviceId);
+            String schemaContentEndpoint = endpoint + SCHEMA_CONTENT_ENDPOINT_BASE_PATH + SCHEMA_CONTENT_ENDPOINT_SUBPATH + "?" + SCHEMA_CONTENT_ENDPOINT_QUERY_KEYWORD + "=" + schemaId;
+            LOGGER.info("Going to retrieve schema content from enpoint:{}", schemaContentEndpoint);
+            // Make a rest call to provider's endpoint direclty to retrieve the schema content
+            RestTemplate restTemplate = new RestTemplate();
+            String schemaContent = restTemplate.postForObject(schemaContentEndpoint, null, String.class);
+            LOGGER.info("Retrieved the schema content for microserviceId: {}, schemaId: {}, schemaContent: {}", microserviceId, schemaId, schemaContent);
+            return schemaContent;
         }
+    }
 
+    private String getEndpointForMicroservice(String microserviceId){
+        String endpoint = null;
+        Lookup lookup = null;
+        try {
+            ServiceName mdnsServiceName  = new ServiceName(microserviceId + MDNS_SERVICE_NAME_SUFFIX);
+            lookup = new Lookup(mdnsServiceName);
+            ServiceInstance[] services = lookup.lookupServices();
+            for (ServiceInstance service : services) {
+                Map<String, String> attributesMap = service.getTextAttributes();
+                if (attributesMap != null && attributesMap.containsKey(ENDPOINTS)) {
+                    String tempEndpoint = attributesMap.get(ENDPOINTS);
+                    if (!tempEndpoint.contains(SCHEMA_ENDPOINT_LIST_SPLITER)){
+                        endpoint = tempEndpoint.replace(ENDPOINT_PREFIX_REST, ENDPOINT_PREFIX_HTTP);
+                    } else {
+                        endpoint = tempEndpoint.split("\\$")[0].replace(ENDPOINT_PREFIX_REST, ENDPOINT_PREFIX_HTTP);
+                    }
+                }
+                break;
+            }
+        } catch (IOException e) {
+            LOGGER.error("Failed to create lookup object with error: {}", e);
+        } finally {
+            if (lookup != null) {
+                try {
+                    lookup.close();
+                } catch (IOException e1) {
+                    LOGGER.error("Failed to close lookup object with error: {}", e1);
+                }
+            }
+        }
+        return endpoint;
     }
 
     // called by consumer to discover/load provider's schema content i.e. SwaggerLoad.loadFromRemote(serviceId, schemaId)

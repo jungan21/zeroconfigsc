@@ -27,7 +27,15 @@ public interface ZeroConfigRegistryConstants {
     String HOST_NAME = "hostName";
     String INSTANCE_HEARTBEAT_RESPONSE_MESSAGE_OK = "OK";
 
+    // Schema Content Path related
+    String SCHEMA_CONTENT_ENDPOINT = "schemaContentEndpoint";
+    String SCHEMA_CONTENT_ENDPOINT_BASE_PATH = "/schemaEndpoint";
+    String SCHEMA_CONTENT_ENDPOINT_SUBPATH = "/schemas";
+    String SCHEMA_CONTENT_ENDPOINT_QUERY_KEYWORD= "schemaId";
+
     //others
     String SCHEMA_ENDPOINT_LIST_SPLITER = "$";
     String UUID_SPLITER = "-";
+    String ENDPOINT_PREFIX_REST = "rest";
+    String ENDPOINT_PREFIX_HTTP = "http";
 }
