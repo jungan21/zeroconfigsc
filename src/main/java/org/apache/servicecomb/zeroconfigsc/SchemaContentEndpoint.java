@@ -22,7 +22,7 @@ public class SchemaContentEndpoint {
     private static final Logger LOGGER = LoggerFactory.getLogger(SchemaContentEndpoint.class);
 
     // each service expose its endpoint for others(consumers) to retrieve its schema content
-    @RequestMapping(path = SCHEMA_CONTENT_ENDPOINT_SUBPATH, produces = MediaType.APPLICATION_JSON, method = RequestMethod.POST )
+    @RequestMapping(path = SCHEMA_CONTENT_ENDPOINT_SUBPATH, produces = MediaType.TEXT_PLAIN, method = RequestMethod.POST )
     public String getSchemaEndpoint(@RequestParam(name = SCHEMA_CONTENT_ENDPOINT_QUERY_KEYWORD) String schemaId) {
         LOGGER.info("Received call from consumer to retrieve the schema content for SchemaId: {}", schemaId);
         if (ClientUtil.microserviceItSelf.getSchemaMap().containsKey(schemaId)) {
