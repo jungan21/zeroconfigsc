@@ -51,17 +51,16 @@ public class ZeroConfigServiceRegistryClientImpl implements ServiceRegistryClien
     @Override
     public void init() {}
 
+    // TODO in our new Zero Configuration registration center, it refers to all service instances
     @Override
     public List<Microservice> getAllMicroservices() {
-        // TODO in our new Zero Configuration registration center, it refers to all service instances
         List<Microservice> serverMicroserviceList =  new ArrayList<>();
         return serverMicroserviceList;
     }
 
-    // this method is called before Microservice registration to check whether service with this ID exists or not
     @Override
-    public String getMicroserviceId(String appId, String microserviceName, String versionRule, String environment) {
-        return ClientUtil.microserviceItSelf != null ? ClientUtil.microserviceItSelf.getServiceId() : null;
+    public String getMicroserviceId(String appId, String microserviceName, String strVersionRule, String environment) {
+        return ClientUtil.microserviceItSelf.getServiceId();
     }
 
     @Override
@@ -69,20 +68,30 @@ public class ZeroConfigServiceRegistryClientImpl implements ServiceRegistryClien
         // refer to the logic in LocalServiceRegistryClientImpl.java
         String serviceId = microservice.getServiceId();
         if (serviceId == null || serviceId.length() == 0){
+            // TODO version?
             serviceId = ClientUtil.generateServiceId(microservice.getAppId(), microservice.getServiceName());
+            microservice.setServiceId(serviceId);
         }
         // set to local variable so that it can be used to retrieve serviceName/appId/version when registering instance
-        ClientUtil.setMicroserviceItSelf(microservice);
+        ClientUtil.microserviceItSelf = microservice;
         return serviceId;
     }
 
-    // add loop up because this is also called by consumer to discover provider service
+    /**
+     * loop up because this is not only called by service registration task, but also called by consumer
+     * to discover provider service for the very first time and populate MicroserviceCache.getService(serviceId)
+     *
+     * @param microserviceId
+     * @return Microservice microservice
+     */
     @Override
     public Microservice getMicroservice(String microserviceId) {
+        // for registration
         if (ClientUtil.microserviceItSelf.getServiceId().equals(microserviceId)){
-            return ClientUtil.getMicroserviceItSelf();
+            return ClientUtil.microserviceItSelf;
         } else {
-            LOGGER.info("Start finding service from MDNS with microserviceId: {}", microserviceId);
+            // for consumer to find the provider service for the very first time
+            LOGGER.info("Start looking up service from MDNS with microserviceId: {}", microserviceId);
             Microservice service = new Microservice();
             Lookup lookup = null;
             try {
@@ -116,56 +125,56 @@ public class ZeroConfigServiceRegistryClientImpl implements ServiceRegistryClien
         return this.getMicroservice(microserviceId);
     }
 
+    // only used in legacy UT code. Only support updating microserviceitself properties.
     @Override
     public boolean updateMicroserviceProperties(String microserviceId, Map<String, String> serviceProperties) {
-        Microservice microservice = this.getMicroservice(microserviceId);
-        if(microservice == null) {
+        if(microserviceId != ClientUtil.microserviceItSelf.getServiceId()) {
             return false;
         }
         // putAll will update values for keys exist in the map, also add new <key, value> to the map
-        microservice.getProperties().putAll(serviceProperties);
-        String serviceId = this.registerMicroservice(microservice);
-
-        return serviceId != null && !serviceId.isEmpty();
+        ClientUtil.microserviceItSelf.getProperties().putAll(serviceProperties);
+        return true;
     }
 
     @Override
     public boolean isSchemaExist(String microserviceId, String schemaId) {
         LOGGER.info("isSchemaExist: microserviceId: {}, scehmaId: {}", microserviceId, schemaId);
-        Microservice currentMicroservice = ClientUtil.getMicroserviceItSelf();
-        List<String> schemaList = currentMicroservice.getSchemas();
-        return currentMicroservice.getServiceId().equals(microserviceId) && schemaList != null && schemaList.contains(schemaId);
+        String serviceId = ClientUtil.microserviceItSelf.getServiceId();
+        if (serviceId == null || (serviceId != null && !serviceId.equals(microserviceId))) {
+            throw new IllegalArgumentException("Invalid serviceId, serviceId=" + microserviceId);
+        }
+
+        List<String> schemaList = ClientUtil.microserviceItSelf.getSchemas();
+        return schemaList != null && schemaList.contains(schemaId);
     }
 
     @Override
     public boolean registerSchema(String microserviceId, String schemaId, String schemaContent) {
         LOGGER.info("registerSchema: serviceId: {}, scehmaId: {}, SchemaContent: {}", microserviceId, schemaId, schemaContent);
 
-        if (ClientUtil.getMicroserviceItSelf() != null && microserviceId.equals(ClientUtil.getMicroserviceItSelf().getServiceId())) {
-            // put to both schemaMap and schemaIdList
-            ClientUtil.getMicroserviceItSelf().addSchema(schemaId, schemaContent);
-            return true;
-        } else {
-            LOGGER.error("Invalid serviceId! Failed to retrieve Microservice for serviceId {}", microserviceId);
-            return false;
+        String serviceId = ClientUtil.microserviceItSelf.getServiceId();
+        if (serviceId == null || (serviceId != null && !serviceId.equals(microserviceId))) {
+            throw new IllegalArgumentException("Invalid serviceId, serviceId=" + microserviceId);
         }
+
+        ClientUtil.microserviceItSelf.addSchema(schemaId, schemaContent);
+        return true;
     }
 
-    // getSchema is also called by service registration task when registering itself
     @Override
     public String getSchema(String microserviceId, String schemaId) {
         LOGGER.info("getSchema: microserviceId: {}, scehmaId: {}", microserviceId, schemaId);
-        if (ClientUtil.getMicroserviceItSelf().getServiceId().equals(microserviceId)) {
-            return  ClientUtil.getMicroserviceItSelf().getSchemaMap().computeIfPresent(schemaId,  (k, v) -> { return v; });
+        // called by service registration task when registering itself
+        if (ClientUtil.microserviceItSelf.getServiceId().equals(microserviceId)) {
+            return  ClientUtil.microserviceItSelf.getSchemaMap().computeIfPresent(schemaId,  (k, v) -> { return v; });
         } else {
-           // called by consumer to load provider's schema content (very first time)
+           // called by consumer to load provider's schema content for the very first time
             String endpoint = this.getEndpointForMicroservice(microserviceId);
             LOGGER.info("Found the endpoint: {} for the microserviceId: {}", endpoint, microserviceId);
             String schemaContentEndpoint = endpoint + SCHEMA_CONTENT_ENDPOINT_BASE_PATH + SCHEMA_CONTENT_ENDPOINT_SUBPATH + "?" + SCHEMA_CONTENT_ENDPOINT_QUERY_KEYWORD + "=" + schemaId;
             LOGGER.info("Going to retrieve schema content from enpoint:{}", schemaContentEndpoint);
-            // Make a rest call to provider's endpoint direclty to retrieve the schema content
-            RestTemplate restTemplate = new RestTemplate();
-            String schemaContent = restTemplate.postForObject(schemaContentEndpoint, null, String.class);
+            // Make a rest call to provider's endpoint directly to retrieve the schema content
+            String schemaContent = new RestTemplate().postForObject(schemaContentEndpoint, null, String.class);
             LOGGER.info("Retrieved the schema content for microserviceId: {}, schemaId: {}, schemaContent: {}", microserviceId, schemaId, schemaContent);
             return schemaContent;
         }
@@ -213,14 +222,14 @@ public class ZeroConfigServiceRegistryClientImpl implements ServiceRegistryClien
 
     @Override
     public Holder<List<GetSchemaResponse>> getSchemas(String microserviceId) {
-        // this method is called in MicroserviceRegisterTask.java doRegister()
+        // this method is called in MicroserviceRegisterTask.java doRegister(), so it's safe for retrieve it from microserviceItSelf object
         Holder<List<GetSchemaResponse>> resultHolder = new Holder<>();
-        if (ClientUtil.getMicroserviceItSelf() == null) {
+        if (ClientUtil.microserviceItSelf.getServiceId() != microserviceId) {
             LOGGER.error("Invalid serviceId! Failed to retrieve microservice for serviceId {}", microserviceId);
             return resultHolder;
         }
         List<GetSchemaResponse> schemas = new ArrayList<>();
-        ClientUtil.getMicroserviceItSelf().getSchemaMap().forEach((key, val) -> {
+        ClientUtil.microserviceItSelf.getSchemaMap().forEach((key, val) -> {
             GetSchemaResponse schema = new GetSchemaResponse();
             schema.setSchema(val);
             schema.setSchemaId(key);
@@ -237,12 +246,13 @@ public class ZeroConfigServiceRegistryClientImpl implements ServiceRegistryClien
         String instanceId = instance.getInstanceId(); // allow client to set the instanceId
         if (instanceId == null || instanceId.length() == 0){
             instanceId = ClientUtil.generateServiceInstanceId(instance);
+            instance.setInstanceId(instanceId);
         }
 
         try {
             // need currentMicroservice object to retrieve serviceName/appID/version attributes for instance to be registered
-            Optional<ServiceInstance> optionalServiceInstance = ClientUtil.convertToMDNSServiceInstance(serviceId, instanceId, instance,
-                    this.ipPortManager,  ClientUtil.getMicroserviceItSelf());
+            Optional<ServiceInstance> optionalServiceInstance = ClientUtil.convertToMDNSServiceInstance(serviceId, instance,
+                    this.ipPortManager,  ClientUtil.microserviceItSelf);
 
             if (optionalServiceInstance.isPresent()){
                 this.multicastDNSService.register(optionalServiceInstance.get()); // broadcast to MDNS
@@ -257,6 +267,7 @@ public class ZeroConfigServiceRegistryClientImpl implements ServiceRegistryClien
         return instanceId;
     }
 
+    // only used in legacy UT code. get microservice instances for providerId,
     @Override
     public List<MicroserviceInstance> getMicroserviceInstance(String consumerId, String providerId) {
         List<MicroserviceInstance> microserviceInstanceResultList = new ArrayList<>();
@@ -270,26 +281,23 @@ public class ZeroConfigServiceRegistryClientImpl implements ServiceRegistryClien
         return microserviceInstanceResultList;
     }
 
+    // only used in legacy UT code. Only support updating microserviceitself instance properties.
     @Override
-    public boolean updateInstanceProperties(String microserviceId, String microserviceInstanceId, Map<String, String> instanceProperties) {
-        MicroserviceInstance microserviceInstance = this.findServiceInstance(microserviceId, microserviceInstanceId);
-        if(microserviceInstance == null) {
-            LOGGER.error("Invalid microserviceId, microserviceId: {} OR microserviceInstanceId, microserviceInstanceId: {}", microserviceId, microserviceInstanceId);
+    public boolean updateInstanceProperties(String microserviceId, String instanceId, Map<String, String> instanceProperties) {
+        Microservice selfMicroservice = ClientUtil.microserviceItSelf;
+        MicroserviceInstance selfInstance = selfMicroservice.getInstance();
+        if (selfInstance == null || !(selfInstance.getInstanceId().equals(instanceId)) || !(selfMicroservice.getServiceId().equals(microserviceId))) {
+            LOGGER.error("Invalid microserviceId, microserviceId: {} OR microserviceInstanceId, microserviceInstanceId: {}", microserviceId, instanceId);
             return false;
         }
 
-        if( microserviceInstance.getProperties().equals(instanceProperties)) {
-            throw new IllegalArgumentException("No update to existing instance properties" +  instanceProperties);
-        }
-
         // putAll will update values for keys exist in the map, also add new <key, value> to the map
-        microserviceInstance.getProperties().putAll(instanceProperties);
-
-        String serviceInstanceId = this.registerMicroserviceInstance(microserviceInstance);
-
-        return serviceInstanceId != null && !serviceInstanceId.isEmpty();
+        selfInstance.getProperties().putAll(instanceProperties);
+        ClientUtil.microserviceItSelf.setInstance(selfInstance);
+        return true;
     }
 
+    // TODO TODO TODO  unregister a specific instance of a service instead of all instance of a service
     @Override
     public boolean unregisterMicroserviceInstance(String microserviceId, String microserviceInstanceId) {
         try {
@@ -319,24 +327,25 @@ public class ZeroConfigServiceRegistryClientImpl implements ServiceRegistryClien
     public void watch(String selfMicroserviceId, AsyncResultCallback<MicroserviceInstanceChangedEvent> callback, AsyncResultCallback<Void> onOpen, AsyncResultCallback<Void> onClose) {}
 
     @Override
-    public List<MicroserviceInstance> findServiceInstance(String consumerId, String appId, String serviceName, String versionRule) {
-        MicroserviceInstances instances = findServiceInstances(consumerId, appId, serviceName, versionRule, null);
+    public List<MicroserviceInstance> findServiceInstance(String selfMicroserviceId, String appId, String serviceName, String versionRule) {
+        MicroserviceInstances instances = findServiceInstances(selfMicroserviceId, appId, serviceName, versionRule, null);
         if (instances.isMicroserviceNotExist()) {
             return null;
         }
         return instances.getInstancesResponse().getInstances();
     }
 
+    // TODO TODO TOTO
     @Override
-    public MicroserviceInstances findServiceInstances(String consumerId, String appId, String serviceName, String strVersionRule, String revision) {
-        LOGGER.info("find service instance for consumerId: {}, serviceName: {}, versionRule: {}, revision: {}", consumerId,serviceName, strVersionRule, revision);
+    public MicroserviceInstances findServiceInstances(String consumerId, String appId, String providerServiceName, String strVersionRule, String revision) {
+        LOGGER.info("find service instance for consumerId: {}, providerServiceName: {}, versionRule: {}, revision: {}", consumerId,providerServiceName, strVersionRule, revision);
         /**
          *  1. consumerId not the provider service Id
          *  2. called by RefreshableMicroserviceCache.pullInstanceFromServiceCenter when consumer make a call to service provider for the first time
          *
          *  strVersionRule: "0.0.0.0+", revision： null
          *
-         *  currently, returnall instance
+         *  currently, return all instance
          */
 
         MicroserviceInstances resultMicroserviceInstances = new MicroserviceInstances();
@@ -345,7 +354,8 @@ public class ZeroConfigServiceRegistryClientImpl implements ServiceRegistryClien
 
         Lookup lookup = null;
         try {
-            ServiceName mdnsServiceName  = new ServiceName(ClientUtil.generateServiceId(appId, serviceName) + MDNS_SERVICE_NAME_SUFFIX);
+            ServiceName mdnsServiceName  = new ServiceName(ClientUtil.generateServiceId(appId, providerServiceName) + MDNS_SERVICE_NAME_SUFFIX);
+            //ServiceName mdnsServiceName  = new ServiceName(MDNS_SERVICE_QUERY_KEYWORD);
             lookup = new Lookup(mdnsServiceName);
             ServiceInstance[] mdnsServices = lookup.lookupServices();
             for (ServiceInstance mdnsService : mdnsServices) {
@@ -374,6 +384,7 @@ public class ZeroConfigServiceRegistryClientImpl implements ServiceRegistryClien
         return microservice.getAppId().equals(appId) && microservice.getServiceName().equals(serviceName);
     }
 
+    // called only by MicroserviceInstanceRegisterTask.java. (right after service instance registration task, it use returned instanceID and serviceId to query)
     @Override
     public MicroserviceInstance findServiceInstance(String serviceId, String instanceId) {
         Optional<ServerMicroserviceInstance>  optionalServerMicroserviceInstance = this.zeroConfigRegistryService.findServiceInstance(serviceId, instanceId);
@@ -386,37 +397,42 @@ public class ZeroConfigServiceRegistryClientImpl implements ServiceRegistryClien
         }
     }
 
+    // for compatibility. only used in the legacy UT code.
     @Override
     public ServiceCenterInfo getServiceCenterInfo() {
         ServiceCenterInfo info = new ServiceCenterInfo();
-        info.setVersion("1.0.0");
-        info.setBuildTag("20200501");
-        info.setRunMode("dev");
-        info.setApiVersion("1.0.0");
+        info.setVersion("");
+        info.setBuildTag("");
+        info.setRunMode("");
+        info.setApiVersion("");
         info.setConfig(new ServiceCenterConfig());
         return info;
     }
+
+    /**
+     *  for compatibility.
+     * 1. Only called by SCBEngine.turnDownInstanceStatus to set instance status to Down
+     * 2. In zero-config context, there is no need to update status (from UP TO DOWN)as there is no physical registry center to show the status
+     *
+      */
 
     @Override
     public boolean updateMicroserviceInstanceStatus(String microserviceId, String instanceId, MicroserviceInstanceStatus status) {
         if (null == status) {
             throw new IllegalArgumentException("null status is now allowed");
         }
+        String selfServiceId = ClientUtil.microserviceItSelf.getServiceId();
+        MicroserviceInstance selfInstance = ClientUtil.microserviceItSelf.getInstance();
 
-        MicroserviceInstance microserviceInstance = this.findServiceInstance(microserviceId, instanceId);
-
-        if(microserviceInstance == null) {
-            throw new IllegalArgumentException("Invalid microserviceId=" +  microserviceId + "OR instanceId=" + instanceId);
+        if (!microserviceId.equals(selfServiceId) || selfInstance == null || !selfInstance.getInstanceId().equals(instanceId)){
+            throw new IllegalArgumentException(
+                    String.format("Invalid argument. microserviceId=%s, instanceId=%s.",
+                            microserviceId,
+                            instanceId));
         }
-
-        if (status.equals(microserviceInstance.getStatus())){
-            throw new IllegalArgumentException("service instance status is same as server side existing status: " +  microserviceInstance.getStatus().toString());
-        }
-
-        LOGGER.debug("update status of microservice instance: {}", status);
-        microserviceInstance.setStatus(status);
-        String serviceInstanceId = this.registerMicroserviceInstance(microserviceInstance);
-        return serviceInstanceId != null && !serviceInstanceId.isEmpty();
+        selfInstance.setStatus(status);
+        this.unregisterMicroserviceInstance(microserviceId, instanceId);
+        return true;
     }
 
 }

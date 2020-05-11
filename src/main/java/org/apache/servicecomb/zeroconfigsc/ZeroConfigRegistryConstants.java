@@ -4,6 +4,7 @@ public interface ZeroConfigRegistryConstants {
 
     // MDNS Related
     String MDNS_SERVICE_NAME_SUFFIX = "._http._tcp.local.";
+    //String MDNS_SERVICE_QUERY_KEYWORD = "_http._tcp.local.";
     String MDNS_HOST_NAME_SUFFIX = ".local.";
     String[] DISCOVER_SERVICE_TYPES = new String[]
             {

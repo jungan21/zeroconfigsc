@@ -9,11 +9,11 @@ public class ServerMicroserviceInstance {
 
     private String serviceName;
 
+    private String serviceId;
+
     private String version;
 
     private String instanceId;
-
-    private String serviceId;
 
     private List<String> endpoints = new ArrayList<>();
 

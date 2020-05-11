@@ -25,15 +25,7 @@ public class ClientUtil {
     // serve as the buffer to store current registered microservice itself
     public static Microservice microserviceItSelf = new Microservice();
 
-    public static Microservice getMicroserviceItSelf() {
-        return microserviceItSelf;
-    }
-
-    public static void setMicroserviceItSelf(Microservice microserviceItSelf) {
-        ClientUtil.microserviceItSelf = microserviceItSelf;
-    }
-
-    public static Optional<ServiceInstance> convertToMDNSServiceInstance(String serviceId, String microserviceInstanceId, MicroserviceInstance microserviceInstance, IpPortManager ipPortManager, Microservice microservice) {
+    public static Optional<ServiceInstance> convertToMDNSServiceInstance(String serviceId, MicroserviceInstance instance, IpPortManager ipPortManager, Microservice microservice) {
         try {
 
             // have to use service id , as  getMicroservice(serviceId) is based on the id
@@ -43,13 +35,13 @@ public class ClientUtil {
 
             Map<String, String> serviceInstanceTextAttributesMap = new HashMap<>();
             serviceInstanceTextAttributesMap.put(SERVICE_ID, serviceId);
-            serviceInstanceTextAttributesMap.put(INSTANCE_ID, microserviceInstanceId);
-            serviceInstanceTextAttributesMap.put(STATUS, microserviceInstance.getStatus().toString());
+            serviceInstanceTextAttributesMap.put(INSTANCE_ID, instance.getInstanceId());
+            serviceInstanceTextAttributesMap.put(STATUS, instance.getStatus().toString());
             serviceInstanceTextAttributesMap.put(APP_ID, microservice.getAppId());
             serviceInstanceTextAttributesMap.put(SERVICE_NAME, microservice.getServiceName());
             serviceInstanceTextAttributesMap.put(VERSION, microservice.getVersion());
 
-            String hostName = microserviceInstance.getHostName();
+            String hostName = instance.getHostName();
             serviceInstanceTextAttributesMap.put(HOST_NAME, hostName);
             Name mdnsHostName = new Name(hostName + MDNS_HOST_NAME_SUFFIX);
 
@@ -67,7 +59,7 @@ public class ClientUtil {
 
             // use special spliter for schema list otherwise, MDNS can't parse the string list properly i.e.  [endpoint1, endpoint1]
             // endpoint1$endpoint2
-            List<String> endpoints = microserviceInstance.getEndpoints();
+            List<String> endpoints = instance.getEndpoints();
             StringBuilder endpointsSB = new StringBuilder();
             if ( endpoints != null && !endpoints.isEmpty()) {
                 for (String endpoint : endpoints) {
@@ -79,9 +71,9 @@ public class ClientUtil {
 
             return Optional.of(new ServiceInstance(serviceName, 0, 0, ipPort.getPort(), mdnsHostName, addresses, serviceInstanceTextAttributesMap));
         } catch (TextParseException e) {
-            LOGGER.error("microservice instance {} has invalid id", microserviceInstanceId, e);
+            LOGGER.error("microservice instance {} has invalid id", instance.getInstanceId(), e);
         } catch (UnknownHostException e1) {
-            LOGGER.error("microservice instance {} with Unknown Host name {}/", microserviceInstanceId, ipPortManager.getAvailableAddress().getHostOrIp(), e1);
+            LOGGER.error("microservice instance {} with Unknown Host name {}/", instance.getInstanceId(), ipPortManager.getAvailableAddress().getHostOrIp(), e1);
         }
         return Optional.empty();
     }

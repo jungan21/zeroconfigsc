@@ -6,6 +6,7 @@ import net.posick.mDNS.ServiceInstance;
 import net.posick.mDNS.MulticastDNSService;
 import net.posick.mDNS.Browse;
 import net.posick.mDNS.DNSSDListener;
+import org.apache.servicecomb.serviceregistry.api.registry.Microservice;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.xbill.DNS.Message;
@@ -29,18 +30,13 @@ public class ServerUtil {
     private static ZeroConfigRegistryService zeroConfigRegistryService;
 
     // 1st key: serviceId, 2nd key: instanceId
-    private static Map<String, Map<String, ServerMicroserviceInstance>>  serverMicroserviceInstanceMap = new ConcurrentHashMap<>();
+    public static Map<String, Map<String, ServerMicroserviceInstance>>  microserviceInstanceMap = new ConcurrentHashMap<>();
 
-    // 1st key: serviceName, 2nd key: Version
-    private static Map<String, List<ServerMicroserviceInstance>>  serverMicroserviceInstanceMapByServiceName = new ConcurrentHashMap<>();
+    // Key: serviceId
+    private Map<String, Microservice> microserviceIdMap = new ConcurrentHashMap<>();
 
-    public static Map<String, Map<String, ServerMicroserviceInstance>>  getServerMicroserviceInstanceMap() {
-        return serverMicroserviceInstanceMap;
-    }
-
-    public static Map<String, List<ServerMicroserviceInstance>>  getserverMicroserviceInstanceMapByServiceName() {
-        return serverMicroserviceInstanceMapByServiceName;
-    }
+    // key: serviceName, 2nd key: Version
+    //public static Map<String, List<ServerMicroserviceInstance>>  serverMicroserviceInstanceMapByServiceName = new ConcurrentHashMap<>();
 
     public static synchronized void init() {
         zeroConfigRegistryService = new ZeroConfigRegistryService();
@@ -111,10 +107,8 @@ public class ServerUtil {
                         LOGGER.info("Microservice Instance is registered to MDNS server {}", serviceTextAttributesMap);
 
                         // for debug start register
-                        Map<String, Map<String, ServerMicroserviceInstance>> instanceMap = ServerUtil.getServerMicroserviceInstanceMap();
-                        System.out.println("Jun Debug instanceMap register: " + instanceMap);
-                        Map<String, List<ServerMicroserviceInstance>> instanceByNameMap = ServerUtil.getserverMicroserviceInstanceMapByServiceName();
-                        System.out.println("Jun Debug instanceByNameMap register: " + instanceByNameMap);
+                        System.out.println("Jun Debug  microserviceInstanceMap:" + ServerUtil.microserviceInstanceMap);
+                       // System.out.println("Jun Debug instanceByNameMap register: " + ServerUtil.serverMicroserviceInstanceMapByServiceName);
                         // for debug start register
 
                     } else {
@@ -131,10 +125,9 @@ public class ServerUtil {
                         LOGGER.info("Microservice Instance is unregistered from MDNS server {}", service.getTextAttributes());
 
                         // for debug start unregister
-                        Map<String, Map<String, ServerMicroserviceInstance>> instanceMap = ServerUtil.getServerMicroserviceInstanceMap();
-                        System.out.println("Jun Debug instanceMap unregister: " + instanceMap);
-                        Map<String, List<ServerMicroserviceInstance>> instanceByNameMap = ServerUtil.getserverMicroserviceInstanceMapByServiceName();
-                        System.out.println("Jun Debug instanceByNameMap unregister: " + instanceByNameMap);
+                        System.out.println("Jun Debug instanceMap unregister: " + ServerUtil.microserviceInstanceMap);
+                       // Map<String, List<ServerMicroserviceInstance>> instanceByNameMap = ServerUtil.serverMicroserviceInstanceMapByServiceName;
+                       // System.out.println("Jun Debug instanceByNameMap unregister: " + instanceByNameMap);
                         // for debug start unregister
                     } else {
                         LOGGER.error("Failed to unregister service as service: {} is null OR service's text attributes is null", service.getTextAttributes());
