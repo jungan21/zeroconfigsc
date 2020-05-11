@@ -5,7 +5,7 @@ import org.apache.servicecomb.foundation.common.utils.BeanUtils;
 import org.apache.servicecomb.serviceregistry.ServiceRegistry;
 import org.apache.servicecomb.serviceregistry.client.ServiceRegistryClient;
 import org.apache.servicecomb.serviceregistry.config.ServiceRegistryConfig;
-import org.apache.servicecomb.zeroconfigsc.server.ZeroConfigRegistryServerUtil;
+import org.apache.servicecomb.zeroconfigsc.server.ServerUtil;
 import org.springframework.beans.BeansException;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationContextAware;
@@ -32,7 +32,7 @@ public class ZeroConfigServiceRegistryApplicationListener implements Application
     public void setApplicationContext(ApplicationContext applicationContext) throws BeansException {
         this.applicationContext = applicationContext;
         BeanUtils.setContext(applicationContext);
-        ZeroConfigRegistryServerUtil.init();
+        ServerUtil.init();
 
         ServiceRegistryConfig serviceRegistryConfig = ServiceRegistryConfig.INSTANCE;
         Function<ServiceRegistry, ServiceRegistryClient> serviceRegistryClientConstructor =

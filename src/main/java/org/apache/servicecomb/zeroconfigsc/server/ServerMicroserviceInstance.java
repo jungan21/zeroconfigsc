@@ -17,11 +17,17 @@ public class ServerMicroserviceInstance {
 
     private List<String> endpoints = new ArrayList<>();
 
+    private List<String> schemas = new ArrayList<>();
+
     private String hostName;
 
     private String status;
 
     public ServerMicroserviceInstance(){}
+
+    public String getAppId() {
+        return appId;
+    }
 
     public void setAppId(String appId) {
         this.appId = appId;
@@ -83,6 +89,14 @@ public class ServerMicroserviceInstance {
         this.status = status;
     }
 
+    public List<String> getSchemas() {
+        return schemas;
+    }
+
+    public void setSchemas(List<String> schemas) {
+        this.schemas = schemas;
+    }
+
     @Override
     public String toString() {
         return "ServerMicroserviceInstance{" +
@@ -90,7 +104,9 @@ public class ServerMicroserviceInstance {
                 ", serviceName='" + serviceName + '\'' +
                 ", version='" + version + '\'' +
                 ", instanceId='" + instanceId + '\'' +
+                ", serviceId='" + serviceId + '\'' +
                 ", endpoints=" + endpoints +
+                ", schemas=" + schemas +
                 ", hostName='" + hostName + '\'' +
                 ", status='" + status + '\'' +
                 '}';

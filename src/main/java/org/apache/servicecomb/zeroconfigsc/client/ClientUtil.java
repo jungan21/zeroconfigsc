@@ -10,9 +10,11 @@ import java.util.*;
 
 import static org.apache.servicecomb.zeroconfigsc.ZeroConfigRegistryConstants.*;
 
-public class ZeroConfigRegistryClientUtil {
+public class ClientUtil {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(ZeroConfigRegistryClientUtil.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(ClientUtil.class);
+
+    public static Microservice microserviceSelf;
 
     public static Optional<Map<String, String>> convertToMDNSServiceInstance(String serviceId, String microserviceInstanceId, MicroserviceInstance microserviceInstance, Microservice microservice) {
         Map<String, String> serviceInstanceTextAttributesMap = new HashMap<>();
@@ -51,6 +53,17 @@ public class ZeroConfigRegistryClientUtil {
         microserviceInstance.setEndpoints(serverMicroserviceInstance.getEndpoints());
         microserviceInstance.setStatus(MicroserviceInstanceStatus.valueOf(serverMicroserviceInstance.getStatus()));
         return microserviceInstance;
+    }
+
+    public static Microservice convertToClientMicroservice(ServerMicroserviceInstance serverMicroserviceInstance) {
+        Microservice microservice=  new Microservice();
+        microservice.setAppId(serverMicroserviceInstance.getAppId());
+        microservice.setServiceId(serverMicroserviceInstance.getServiceId());
+        microservice.setServiceName(serverMicroserviceInstance.getServiceName());
+        microservice.setVersion(serverMicroserviceInstance.getVersion());
+        microservice.setStatus(serverMicroserviceInstance.getStatus());
+        microservice.setSchemas(serverMicroserviceInstance.getSchemas());
+        return microservice;
     }
 
     public static String generateServiceId(Microservice microservice){

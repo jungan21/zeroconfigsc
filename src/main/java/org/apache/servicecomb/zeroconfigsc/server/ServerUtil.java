@@ -17,9 +17,9 @@ import java.util.concurrent.ExecutorService;
 
 import static org.apache.servicecomb.zeroconfigsc.ZeroConfigRegistryConstants.*;
 
-public class ZeroConfigRegistryServerUtil {
+public class ServerUtil {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(ZeroConfigRegistryServerUtil.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(ServerUtil.class);
 
     private static MulticastSocket multicastSocket;
 
@@ -28,25 +28,17 @@ public class ZeroConfigRegistryServerUtil {
     private static InetAddress group;
 
     // 1st key: serviceId, 2nd key: instanceId
-    private static Map<String, Map<String, ServerMicroserviceInstance>>  serverMicroserviceInstanceMap = new ConcurrentHashMap<>();
+    public static Map<String, Map<String, ServerMicroserviceInstance>>  microserviceInstanceMap = new ConcurrentHashMap<>();
 
     // 1st key: serviceName, 2nd key: Version
-    private static Map<String, List<ServerMicroserviceInstance>>  serverMicroserviceInstanceMapByServiceName = new ConcurrentHashMap<>();
-
-    public static Map<String, Map<String, ServerMicroserviceInstance>>  getServerMicroserviceInstanceMap() {
-        return serverMicroserviceInstanceMap;
-    }
-
-    public static Map<String, List<ServerMicroserviceInstance>>  getserverMicroserviceInstanceMapByServiceName() {
-        return serverMicroserviceInstanceMapByServiceName;
-    }
+  //  private static Map<String, List<ServerMicroserviceInstance>>  serverMicroserviceInstanceMapByServiceName = new ConcurrentHashMap<>();
 
     public static synchronized void init() {
         zeroConfigRegistryService = new ZeroConfigRegistryService();
         try {
             group = InetAddress.getByName(GROUP);
         } catch (UnknownHostException e) {
-            LOGGER.error("Unknow host exception when creating goup" + e);
+            LOGGER.error("Unknown host exception when creating group" + e);
         }
 
         ExecutorService executor = Executors.newSingleThreadExecutor();
@@ -56,8 +48,8 @@ public class ZeroConfigRegistryServerUtil {
 
     }
 
-    public static Optional<ServerMicroserviceInstance> convertToServerMicroserviceInstance(Map<String, String> serviceAttributeMap){
-        return  Optional.of(buildServerMicroserviceInstanceFromMap(serviceAttributeMap));
+    public static Optional<ServerMicroserviceInstance> convertToServerMicroserviceInstance(Map<String, String> serviceInstanceAttributeMap){
+        return  Optional.of(buildServerMicroserviceInstanceFromMap(serviceInstanceAttributeMap));
     }
 
     private static ServerMicroserviceInstance buildServerMicroserviceInstanceFromMap (Map<String, String> serviceAttributeMap) {
@@ -72,7 +64,7 @@ public class ZeroConfigRegistryServerUtil {
 
         // rest://127.0.0.1:8080$rest://127.0.0.1:8081
         String endPointsString = serviceAttributeMap.get(ENDPOINTS);
-        if ( endPointsString != null && !endPointsString.isEmpty()){
+        if (endPointsString != null && !endPointsString.isEmpty()){
             if (endPointsString.contains(SCHEMA_ENDPOINT_LIST_SPLITER)){
                 serverMicroserviceInstance.setEndpoints(Arrays.asList(endPointsString.split("\\$")));
             } else {
@@ -81,6 +73,19 @@ public class ZeroConfigRegistryServerUtil {
                 serverMicroserviceInstance.setEndpoints(list);
             }
         }
+
+        // schemaId1$schemaId2
+        String schemaIdsString = serviceAttributeMap.get(SCHEMA_IDS);
+        if ( schemaIdsString != null && !schemaIdsString.isEmpty()){
+            if (schemaIdsString.contains(SCHEMA_ENDPOINT_LIST_SPLITER)){
+                serverMicroserviceInstance.setEndpoints(Arrays.asList(endPointsString.split("\\$")));
+            } else {
+                List<String> list  = new ArrayList<>();
+                list.add(schemaIdsString);
+                serverMicroserviceInstance.setEndpoints(list);
+            }
+        }
+
         return serverMicroserviceInstance;
     }
 
@@ -106,7 +111,6 @@ public class ZeroConfigRegistryServerUtil {
 
 
     private static void startListenerForRegisterUnregisterEvent () {
-
         try {
             byte[] buffer = new byte[4096]; // 4k
             multicastSocket =  new MulticastSocket(PORT);
@@ -126,7 +130,6 @@ public class ZeroConfigRegistryServerUtil {
                 Map<String, String> receivedStringMap = getMapFromString(receivedPacketString);
                 LOGGER.info("Converted service register/unregister event to Map {}", receivedStringMap);
                 if ( receivedStringMap != null && receivedStringMap.containsKey(EVENT)){
-
                     String event = receivedStringMap.get(EVENT);
                     if (event.equals(REGISTER_EVENT)){
                         zeroConfigRegistryService.registerMicroserviceInstance(receivedStringMap);
@@ -142,7 +145,7 @@ public class ZeroConfigRegistryServerUtil {
 
         } catch (IOException e) {
             //failed to create MulticastSocket, the PORT might have been occupied
-            LOGGER.error("Received service register/unregister event" + e);
+            LOGGER.error("Failed to create MulticastSocket object for receiving register/unregister event" + e);
         } finally {
             if (multicastSocket != null) {
                 try {
