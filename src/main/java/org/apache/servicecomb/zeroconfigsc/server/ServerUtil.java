@@ -83,7 +83,7 @@ public class ServerUtil {
             } else {
                 List<String> list  = new ArrayList<>();
                 list.add(schemaIdsString);
-                serverMicroserviceInstance.setEndpoints(list);
+                serverMicroserviceInstance.setSchemas(list);
             }
         }
 
