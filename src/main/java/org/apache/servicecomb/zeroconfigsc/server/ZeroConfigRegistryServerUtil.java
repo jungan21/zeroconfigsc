@@ -108,7 +108,7 @@ public class ZeroConfigRegistryServerUtil {
     private static void startListenerForRegisterUnregisterEvent () {
 
         try {
-            byte[] buffer = new byte[1024];
+            byte[] buffer = new byte[4096]; // 4k
             multicastSocket =  new MulticastSocket(PORT);
             group = InetAddress.getByName(GROUP);
             multicastSocket.joinGroup(group); // need to join the group to be able to receive the data

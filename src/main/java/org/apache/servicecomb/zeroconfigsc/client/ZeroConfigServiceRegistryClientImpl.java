@@ -36,7 +36,7 @@ public class ZeroConfigServiceRegistryClientImpl implements ServiceRegistryClien
 
     private MulticastSocket multicastSocket ;
     private ZeroConfigRegistryService zeroConfigRegistryService;
-    private Microservice currentMicroservice;
+    private Microservice microserviceSelf;
     private MicroserviceInstance currentMicroserviceInstance;
 
     public ZeroConfigServiceRegistryClientImpl(){
@@ -63,7 +63,7 @@ public class ZeroConfigServiceRegistryClientImpl implements ServiceRegistryClien
     // this method is called before Microservice registration to check whether service with this ID exists or not
     @Override
     public String getMicroserviceId(String appId, String microserviceName, String versionRule, String environment) {
-        return this.currentMicroservice != null ? this.currentMicroservice.getServiceId() : null;
+        return this.microserviceSelf != null ? this.microserviceSelf.getServiceId() : null;
     }
 
     @Override
@@ -74,13 +74,13 @@ public class ZeroConfigServiceRegistryClientImpl implements ServiceRegistryClien
             serviceId = ZeroConfigRegistryClientUtil.generateServiceId(microservice);
         }
         // set to local variable so that it can be used to retrieve serviceName/appId/version when registering instance
-        this.currentMicroservice = microservice;
+        this.microserviceSelf = microservice;
         return serviceId;
     }
 
     @Override
     public Microservice getMicroservice(String microserviceId) {
-        return this.currentMicroservice.getServiceId().equals(microserviceId) ? this.currentMicroservice : null;
+        return this.microserviceSelf.getServiceId().equals(microserviceId) ? this.microserviceSelf : null;
     }
 
     @Override
@@ -103,8 +103,8 @@ public class ZeroConfigServiceRegistryClientImpl implements ServiceRegistryClien
 
     @Override
     public boolean isSchemaExist(String microserviceId, String schemaId) {
-        List<String> schemaList = this.currentMicroservice.getSchemas();
-        return this.currentMicroservice.getServiceId().equals(microserviceId) && schemaList != null && schemaList.contains(schemaId);
+        List<String> schemaList = this.microserviceSelf.getSchemas();
+        return this.microserviceSelf.getServiceId().equals(microserviceId) && schemaList != null && schemaList.contains(schemaId);
     }
 
     @Override
@@ -130,12 +130,12 @@ public class ZeroConfigServiceRegistryClientImpl implements ServiceRegistryClien
     @Override
     public Holder<List<GetSchemaResponse>> getSchemas(String microserviceId) {
         Holder<List<GetSchemaResponse>> resultHolder = new Holder<>();
-        if (currentMicroservice == null) {
+        if (microserviceSelf == null) {
             LOGGER.error("Invalid serviceId! Failed to retrieve microservice for serviceId {}", microserviceId);
             return resultHolder;
         }
         List<GetSchemaResponse> schemas = new ArrayList<>();
-        currentMicroservice.getSchemaMap().forEach((key, val) -> {
+        microserviceSelf.getSchemaMap().forEach((key, val) -> {
             GetSchemaResponse schema = new GetSchemaResponse();
             schema.setSchema(val);
             schema.setSchemaId(key);
@@ -156,7 +156,7 @@ public class ZeroConfigServiceRegistryClientImpl implements ServiceRegistryClien
         // TODO: 保持一个临时的 instance, 然后每隔几秒就发送一个心跳再自注册 广播一下
         try {
             // need currentMicroservice object to retrieve serviceName/appID/version attributes for instance to be registered
-            Optional<Map<String, String>> optionalServiceInstance = ZeroConfigRegistryClientUtil.convertToMDNSServiceInstance(serviceId, instanceId, instance, this.currentMicroservice);
+            Optional<Map<String, String>> optionalServiceInstance = ZeroConfigRegistryClientUtil.convertToMDNSServiceInstance(serviceId, instanceId, instance, this.microserviceSelf);
 
             if (optionalServiceInstance.isPresent()){
                 byte[] instanceData = optionalServiceInstance.get().toString().getBytes();
@@ -220,6 +220,7 @@ public class ZeroConfigServiceRegistryClientImpl implements ServiceRegistryClien
                 byte[] unregisterEvent = map.toString().getBytes();
                 DatagramPacket unregisterInstanceDataPacket = new DatagramPacket(unregisterEvent, unregisterEvent.length, InetAddress.getByName(GROUP), PORT);
                 this.multicastSocket.send(unregisterInstanceDataPacket);
+                multicastSocket.setTimeToLive(2);
                 return true;
             } catch (IOException e) {
                 LOGGER.error("Failed to broadcast unregister microservice instance event. servcieId: {} instanceId:{}", microserviceId, microserviceInstanceId,  e);
