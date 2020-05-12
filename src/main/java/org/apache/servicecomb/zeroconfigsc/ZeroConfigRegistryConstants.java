@@ -32,8 +32,9 @@ public interface ZeroConfigRegistryConstants {
     String SCHEMA_CONTENT_ENDPOINT_QUERY_KEYWORD= "schemaId";
 
     //others
-    String SPLITER_MAP_KEY_VALUE = "=";
-    String SCHEMA_ENDPOINT_LIST_SPLITER = "$";
+    String LIST_STRING_SPLITER = "$";
     String UUID_SPLITER = "-";
     long HEALTH_CHECK_INTERVAL = 3;
+    String ENDPOINT_PREFIX_REST = "rest";
+    String ENDPOINT_PREFIX_HTTP = "http";
 }

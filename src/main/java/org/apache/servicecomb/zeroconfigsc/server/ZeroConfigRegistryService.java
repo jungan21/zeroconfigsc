@@ -88,7 +88,6 @@ public class ZeroConfigRegistryService {
         return Optional.ofNullable(new ArrayList<>(instanceIdMap.values()));
     }
 
-
     public void heartbeat(Map<String, String> heartbeatEventMap) {
         String serviceId = heartbeatEventMap.get(SERVICE_ID);
         String instanceId = heartbeatEventMap.get(INSTANCE_ID);
@@ -115,7 +114,6 @@ public class ZeroConfigRegistryService {
        return serverMicroserviceInstanceList.get(0);
     }
 
-
     public List<ServerMicroserviceInstance> findServiceInstances(String appId, String serviceName, String strVersionRule, String revision) {
         List<ServerMicroserviceInstance> resultInstanceList = new ArrayList<>();
 
@@ -128,7 +126,6 @@ public class ZeroConfigRegistryService {
                 }
             }
         }
-
         return resultInstanceList;
     }
 }

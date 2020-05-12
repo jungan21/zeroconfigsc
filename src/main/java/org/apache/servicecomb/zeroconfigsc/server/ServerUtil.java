@@ -1,7 +1,5 @@
 package org.apache.servicecomb.zeroconfigsc.server;
 
-import static org.apache.servicecomb.zeroconfigsc.ZeroConfigRegistryConstants.SCHEMA_ENDPOINT_LIST_SPLITER;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -110,32 +108,24 @@ public class ServerUtil {
         serverMicroserviceInstance.setAppId(serviceAttributeMap.get(APP_ID));
         serverMicroserviceInstance.setServiceName(serviceAttributeMap.get(SERVICE_NAME));
         serverMicroserviceInstance.setVersion(serviceAttributeMap.get(VERSION));
-
-        // rest://127.0.0.1:8080$rest://127.0.0.1:8081
-        String endPointsString = serviceAttributeMap.get(ENDPOINTS);
-        if (endPointsString != null && !endPointsString.isEmpty()){
-            if (endPointsString.contains(SCHEMA_ENDPOINT_LIST_SPLITER)){
-                serverMicroserviceInstance.setEndpoints(Arrays.asList(endPointsString.split("\\$")));
-            } else {
-                List<String> list  = new ArrayList<>();
-                list.add(endPointsString);
-                serverMicroserviceInstance.setEndpoints(list);
-            }
-        }
-
-        // schemaId1$schemaId2
-        String schemaIdsString = serviceAttributeMap.get(SCHEMA_IDS);
-        if ( schemaIdsString != null && !schemaIdsString.isEmpty()){
-            if (schemaIdsString.contains(SCHEMA_ENDPOINT_LIST_SPLITER)){
-                serverMicroserviceInstance.setSchemas(Arrays.asList(endPointsString.split("\\$")));
-            } else {
-                List<String> list  = new ArrayList<>();
-                list.add(schemaIdsString);
-                serverMicroserviceInstance.setSchemas(list);
-            }
-        }
-
+        // list type attributes
+        serverMicroserviceInstance.setEndpoints(convertStringToList(serviceAttributeMap.get(ENDPOINTS)));
+        serverMicroserviceInstance.setSchemas(convertStringToList(serviceAttributeMap.get(SCHEMA_IDS)));
         return serverMicroserviceInstance;
+    }
+
+    // rest://127.0.0.1:8080$rest://127.0.0.1:8081
+    // schemaId1$schemaId2
+    private static List<String> convertStringToList(String listString){
+        List<String> resultList  = new ArrayList<>();
+        if (listString != null && !listString.isEmpty()){
+            if (listString.contains(LIST_STRING_SPLITER)){
+                resultList = Arrays.asList(listString.split("\\$"));
+            } else {
+                resultList.add(listString);
+            }
+        }
+        return resultList;
     }
 
     private static Map<String, String> getMapFromString(String str){
@@ -157,7 +147,6 @@ public class ServerUtil {
         }
         return map;
     }
-
 
     private static void startListenerForRegisterUnregisterEvent () {
         try {

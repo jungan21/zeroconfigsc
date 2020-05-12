@@ -121,6 +121,8 @@ public class ServerMicroserviceInstance {
                 ", schemas=" + schemas +
                 ", hostName='" + hostName + '\'' +
                 ", status='" + status + '\'' +
+                ", lastHeartbeatTimeStamp=" + lastHeartbeatTimeStamp +
                 '}';
     }
+
 }

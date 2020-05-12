@@ -153,7 +153,7 @@ public class ZeroConfigServiceRegistryClientImpl implements ServiceRegistryClien
         ServerMicroserviceInstance serverMicroserviceInstance = zeroConfigRegistryService.getMicroservice(microserviceId);
         LOGGER.info("getEndpointForMicroservice: serverMicroserviceInstance: {}", serverMicroserviceInstance);
         if (serverMicroserviceInstance != null && !serverMicroserviceInstance.getEndpoints().isEmpty()){
-            return serverMicroserviceInstance.getEndpoints().get(0);
+            return serverMicroserviceInstance.getEndpoints().get(0).replace(ENDPOINT_PREFIX_REST, ENDPOINT_PREFIX_HTTP);
         }
         return null;
     }
@@ -272,7 +272,6 @@ public class ZeroConfigServiceRegistryClientImpl implements ServiceRegistryClien
 
     }
 
-    //TODO  需要定时没隔几秒检查iterate所有in memory map微服务实例，如果没有heartbeat response就删除
     @Override
     public HeartbeatResponse heartbeat(String microserviceId, String microserviceInstanceId) {
         HeartbeatResponse response = new HeartbeatResponse();

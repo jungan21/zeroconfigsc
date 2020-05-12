@@ -69,30 +69,25 @@ public class ClientUtil {
         String hostName = microserviceInstance.getHostName();
         serviceInstanceTextAttributesMap.put(HOST_NAME, hostName);
 
-        // use special spliter for schema list otherwise, MDNS can't parse the string list properly i.e.  [schema1, schema2]
         // schema1$schema2
-        List<String> endpoints = microserviceInstance.getEndpoints();
-        StringBuilder endpointsSB  = new StringBuilder();
-        if (endpoints != null && !endpoints.isEmpty()) {
-            for (String endpoint : endpoints) {
-                endpointsSB.append(endpoint + SCHEMA_ENDPOINT_LIST_SPLITER);
-            }
-            // remove the last $
-            serviceInstanceTextAttributesMap.put(ENDPOINTS, endpointsSB.toString().substring(0, endpointsSB.toString().length()-1));
-        }
+        serviceInstanceTextAttributesMap.put(ENDPOINTS, convertListToString(microserviceInstance.getEndpoints()));
+        serviceInstanceTextAttributesMap.put(SCHEMA_IDS, convertListToString(microservice.getSchemas()));
 
-        List<String> schemas = microservice.getSchemas();
-        StringBuilder schemasSB = new StringBuilder();
-        if (schemas != null && !schemas.isEmpty()) {
-            for (String schema : schemas) {
-                schemasSB.append(schema + SCHEMA_ENDPOINT_LIST_SPLITER);
-            }
-            // remove the last $
-            serviceInstanceTextAttributesMap.put(SCHEMA_IDS, schemasSB.toString().substring(0, schemasSB.toString().length()-1));
-        }
         return Optional.of(serviceInstanceTextAttributesMap);
-
     }
+
+    private static String convertListToString (List<String> list){
+        if (list != null && !list.isEmpty()){
+            StringBuilder sb = new StringBuilder();
+            for (String item : list) {
+                sb.append(item + LIST_STRING_SPLITER);
+            }
+            // remove the last $
+            return sb.toString().substring(0, sb.toString().length()-1);
+        }
+        return "";
+    }
+
 
     public static MicroserviceInstance convertToClientMicroserviceInstance(ServerMicroserviceInstance serverMicroserviceInstance) {
         MicroserviceInstance microserviceInstance =  new MicroserviceInstance();
