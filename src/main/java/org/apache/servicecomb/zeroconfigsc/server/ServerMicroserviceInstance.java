@@ -1,5 +1,6 @@
 package org.apache.servicecomb.zeroconfigsc.server;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -21,9 +22,20 @@ public class ServerMicroserviceInstance {
 
     private String hostName;
 
+    // for compatibale with legacy code
     private String status;
 
+    private Instant lastHeartbeatTimeStamp;
+
     public ServerMicroserviceInstance(){}
+
+    public Instant getLastHeartbeatTimeStamp() {
+        return lastHeartbeatTimeStamp;
+    }
+
+    public void setLastHeartbeatTimeStamp(Instant lastHeartbeatTimeStamp) {
+        this.lastHeartbeatTimeStamp = lastHeartbeatTimeStamp;
+    }
 
     public String getAppId() {
         return appId;

@@ -1,9 +1,9 @@
 package org.apache.servicecomb.zeroconfigsc.server;
 
-import org.apache.servicecomb.serviceregistry.api.registry.Microservice;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -75,25 +75,11 @@ public class ZeroConfigRegistryService {
 
     }
 
-    /**
-     *  find a service instance based on the service id and instance id
-     *
-     * @param serviceId
-     * @param instanceId
-     * @return ServerMicroserviceInstance object
-     */
     public Optional<ServerMicroserviceInstance> findServiceInstance(String serviceId, String instanceId) {
         Map<String, ServerMicroserviceInstance>  serverMicroserviceInstanceMap = ServerUtil.microserviceInstanceMap.get(serviceId);
         return serverMicroserviceInstanceMap != null ? Optional.ofNullable(serverMicroserviceInstanceMap.get(instanceId)) : Optional.empty();
     }
 
-    /**
-     *  find a list of service instance based on the service id
-     *
-     * @param consumerId
-     * @param providerId
-     * @return ServerMicroserviceInstance list
-     */
     public Optional<List<ServerMicroserviceInstance>> getMicroserviceInstance(String consumerId, String providerId) {
         Map<String, ServerMicroserviceInstance> instanceIdMap = ServerUtil.microserviceInstanceMap.get(providerId);
         if (instanceIdMap == null) {
@@ -102,19 +88,47 @@ public class ZeroConfigRegistryService {
         return Optional.ofNullable(new ArrayList<>(instanceIdMap.values()));
     }
 
-    /**
-     *
-     * @param microserviceId
-     * @param microserviceInstanceId
-     * @return boolean true/false
-     */
+
+    public void heartbeat(Map<String, String> heartbeatEventMap) {
+        String serviceId = heartbeatEventMap.get(SERVICE_ID);
+        String instanceId = heartbeatEventMap.get(INSTANCE_ID);
+        Map<String, ServerMicroserviceInstance>  serverMicroserviceInstanceMap = ServerUtil.microserviceInstanceMap.get(serviceId);
+        if (serverMicroserviceInstanceMap != null && serverMicroserviceInstanceMap.containsKey(instanceId)){
+            ServerMicroserviceInstance instance = serverMicroserviceInstanceMap.get(instanceId);
+            instance.setLastHeartbeatTimeStamp(Instant.now());
+        } else {
+            heartbeatEventMap.put(EVENT, REGISTER_EVENT);
+            this.registerMicroserviceInstance(heartbeatEventMap);
+        }
+    }
+
+    // for compability with legacy code
     public boolean heartbeat(String microserviceId, String microserviceInstanceId) {
         Map<String, ServerMicroserviceInstance>  serverMicroserviceInstanceMap = ServerUtil.microserviceInstanceMap.get(microserviceId);
         return serverMicroserviceInstanceMap != null && serverMicroserviceInstanceMap.containsKey(microserviceInstanceId);
     }
 
+    // for compability with legacy code.
     public ServerMicroserviceInstance getMicroservice(String microserviceId) {
         Map<String, ServerMicroserviceInstance> instanceIdMap = ServerUtil.microserviceInstanceMap.get(microserviceId);
-       return ServerUtil.microserviceInstanceMap.get(microserviceId);
+        List <ServerMicroserviceInstance> serverMicroserviceInstanceList = new  ArrayList<>(instanceIdMap.values());
+       return serverMicroserviceInstanceList.get(0);
+    }
+
+
+    public List<ServerMicroserviceInstance> findServiceInstances(String appId, String serviceName, String strVersionRule, String revision) {
+        List<ServerMicroserviceInstance> resultInstanceList = new ArrayList<>();
+
+        for (Map.Entry<String, Map<String, ServerMicroserviceInstance>> entry : ServerUtil.microserviceInstanceMap.entrySet()){
+            Map<String, ServerMicroserviceInstance>  instanceIdMap = entry.getValue();
+            for (Map.Entry<String, ServerMicroserviceInstance> innerEntry : instanceIdMap.entrySet()) {
+                ServerMicroserviceInstance instance = innerEntry.getValue();
+                if (appId.equals(instance.getAppId()) && serviceName.equals(instance.getServiceName())){
+                    resultInstanceList.add(instance);
+                }
+            }
+        }
+
+        return resultInstanceList;
     }
 }

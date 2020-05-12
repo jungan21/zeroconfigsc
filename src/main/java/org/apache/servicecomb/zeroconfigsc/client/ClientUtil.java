@@ -6,7 +6,14 @@ import org.apache.servicecomb.serviceregistry.api.registry.MicroserviceInstance;
 import org.apache.servicecomb.serviceregistry.api.registry.MicroserviceInstanceStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.net.DatagramPacket;
+import java.net.InetAddress;
+import java.net.MulticastSocket;
 import java.util.*;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 import static org.apache.servicecomb.zeroconfigsc.ZeroConfigRegistryConstants.*;
 
@@ -14,9 +21,40 @@ public class ClientUtil {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ClientUtil.class);
 
-    public static Microservice microserviceSelf;
+    private static ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
 
-    public static Optional<Map<String, String>> convertToMDNSServiceInstance(String serviceId, String microserviceInstanceId, MicroserviceInstance microserviceInstance, Microservice microservice) {
+    public static Microservice microserviceSelf = new Microservice();
+
+    public static Map<String, String> serviceInstanceMapForHeartbeat = null;
+
+    public static synchronized void init(){
+        Runnable heartbeatRunnable = new Runnable() {
+            @Override
+            public void run() {
+                LOGGER.info("Client side runs scheduled heartbeat event for serviceInstanceMapForHeartbeat: {}", serviceInstanceMapForHeartbeat);
+                // after first registration succeeds
+                if (serviceInstanceMapForHeartbeat != null && !serviceInstanceMapForHeartbeat.isEmpty()){
+                    try {
+                        byte[] heartbeatEventDataBytes = serviceInstanceMapForHeartbeat.toString().getBytes();
+                        MulticastSocket multicastSocket = new MulticastSocket();
+                        multicastSocket.setLoopbackMode(false);
+                        multicastSocket.setTimeToLive(255);
+
+                        DatagramPacket instanceDataPacket = new DatagramPacket(heartbeatEventDataBytes, heartbeatEventDataBytes.length,
+                                InetAddress.getByName(GROUP), PORT);
+
+                        multicastSocket.send(instanceDataPacket);
+                    } catch (Exception e) {
+                        LOGGER.error("Failed to send heartbeat event", e);
+                    }
+                }
+            }
+        };
+        executor.scheduleAtFixedRate(heartbeatRunnable, 2, 3, TimeUnit.SECONDS);
+    }
+
+
+    public static Optional<Map<String, String>> convertToRegisterDataModel(String serviceId, String microserviceInstanceId, MicroserviceInstance microserviceInstance, Microservice microservice) {
         Map<String, String> serviceInstanceTextAttributesMap = new HashMap<>();
 
         serviceInstanceTextAttributesMap.put(EVENT, REGISTER_EVENT);
@@ -34,15 +72,26 @@ public class ClientUtil {
         // use special spliter for schema list otherwise, MDNS can't parse the string list properly i.e.  [schema1, schema2]
         // schema1$schema2
         List<String> endpoints = microserviceInstance.getEndpoints();
-        StringBuilder sb = new StringBuilder();
-        if ( endpoints != null && !endpoints.isEmpty()) {
+        StringBuilder endpointsSB  = new StringBuilder();
+        if (endpoints != null && !endpoints.isEmpty()) {
             for (String endpoint : endpoints) {
-                sb.append(endpoint + SCHEMA_ENDPOINT_LIST_SPLITER);
+                endpointsSB.append(endpoint + SCHEMA_ENDPOINT_LIST_SPLITER);
             }
             // remove the last $
-            serviceInstanceTextAttributesMap.put(ENDPOINTS,sb.toString().substring(0, sb.toString().length()-1));
+            serviceInstanceTextAttributesMap.put(ENDPOINTS, endpointsSB.toString().substring(0, endpointsSB.toString().length()-1));
+        }
+
+        List<String> schemas = microservice.getSchemas();
+        StringBuilder schemasSB = new StringBuilder();
+        if (schemas != null && !schemas.isEmpty()) {
+            for (String schema : schemas) {
+                schemasSB.append(schema + SCHEMA_ENDPOINT_LIST_SPLITER);
+            }
+            // remove the last $
+            serviceInstanceTextAttributesMap.put(SCHEMA_IDS, schemasSB.toString().substring(0, schemasSB.toString().length()-1));
         }
         return Optional.of(serviceInstanceTextAttributesMap);
+
     }
 
     public static MicroserviceInstance convertToClientMicroserviceInstance(ServerMicroserviceInstance serverMicroserviceInstance) {

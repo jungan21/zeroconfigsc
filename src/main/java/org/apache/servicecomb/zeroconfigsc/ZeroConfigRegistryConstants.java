@@ -8,6 +8,7 @@ public interface ZeroConfigRegistryConstants {
     String EVENT = "event";
     String REGISTER_EVENT = "register";
     String UNREGISTER_EVENT = "unregister";
+    String HEARTBEAT_EVENT = "heartbeat";
 
     // Microservice Attributes
     String APP_ID = "appId";
@@ -34,4 +35,5 @@ public interface ZeroConfigRegistryConstants {
     String SPLITER_MAP_KEY_VALUE = "=";
     String SCHEMA_ENDPOINT_LIST_SPLITER = "$";
     String UUID_SPLITER = "-";
+    long HEALTH_CHECK_INTERVAL = 3;
 }

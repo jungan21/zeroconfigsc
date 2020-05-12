@@ -10,10 +10,9 @@ import java.net.DatagramPacket;
 import java.net.InetAddress;
 import java.net.MulticastSocket;
 import java.net.UnknownHostException;
+import java.time.Instant;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ExecutorService;
+import java.util.concurrent.*;
 
 import static org.apache.servicecomb.zeroconfigsc.ZeroConfigRegistryConstants.*;
 
@@ -27,11 +26,10 @@ public class ServerUtil {
 
     private static InetAddress group;
 
+    private static ScheduledExecutorService scheduledExecutor = Executors.newSingleThreadScheduledExecutor();
+
     // 1st key: serviceId, 2nd key: instanceId
     public static Map<String, Map<String, ServerMicroserviceInstance>>  microserviceInstanceMap = new ConcurrentHashMap<>();
-
-    // 1st key: serviceName, 2nd key: Version
-  //  private static Map<String, List<ServerMicroserviceInstance>>  serverMicroserviceInstanceMapByServiceName = new ConcurrentHashMap<>();
 
     public static synchronized void init() {
         zeroConfigRegistryService = new ZeroConfigRegistryService();
@@ -40,11 +38,62 @@ public class ServerUtil {
         } catch (UnknownHostException e) {
             LOGGER.error("Unknown host exception when creating group" + e);
         }
+        startEventListenerThread();
+        startInstanceStatusCheckerThread();
+    }
 
-        ExecutorService executor = Executors.newSingleThreadExecutor();
-        executor.submit(() -> {
+    private static void startEventListenerThread(){
+        ExecutorService listenerExecutor = Executors.newSingleThreadExecutor();
+        listenerExecutor.submit(() -> {
             startListenerForRegisterUnregisterEvent();
         });
+    }
+
+    private static void startInstanceStatusCheckerThread(){
+        Runnable runnable = new Runnable() {
+            @Override
+            public void run() {
+                LOGGER.info("Server side runs scheduled health check task");
+                List<ServerMicroserviceInstance> toBeRemovedInstanceList = new ArrayList<>();
+
+                try {
+                    // check status
+                    for (Map.Entry<String, Map<String, ServerMicroserviceInstance>> entry : microserviceInstanceMap.entrySet()){
+                        if (entry.getValue() != null){
+                            Map<String, ServerMicroserviceInstance>  instanceIdMap = entry.getValue();
+                            for (Map.Entry<String, ServerMicroserviceInstance> innerEntry : instanceIdMap.entrySet()) {
+                                ServerMicroserviceInstance instance = innerEntry.getValue();
+                                // current time - last heartbeattime > 3 seconds => dead instance
+                                if (instance.getLastHeartbeatTimeStamp() != null &&
+                                        instance.getLastHeartbeatTimeStamp().plusSeconds(HEALTH_CHECK_INTERVAL).compareTo(Instant.now()) < 0)
+                                    toBeRemovedInstanceList.add(innerEntry.getValue());
+                            }
+                        }
+                    }
+
+                    // remove dead instances
+                    if (!toBeRemovedInstanceList.isEmpty()){
+                        for (ServerMicroserviceInstance instance : toBeRemovedInstanceList){
+                            for (Map.Entry<String, Map<String, ServerMicroserviceInstance>> entry : microserviceInstanceMap.entrySet()){
+                                String serviceId = entry.getKey();
+                                Map<String, ServerMicroserviceInstance>  instanceIdMap = entry.getValue();
+                                if (serviceId.equals(instance.getServiceId())){
+                                    instanceIdMap.remove(instance.getServiceId());
+                                }
+                            }
+                        }
+                    }
+
+                    LOGGER.info("JUNGAN DEBUG microserviceInstanceMap after remove dead instance:  {}", microserviceInstanceMap);
+
+                } catch (Exception e) {
+                    LOGGER.error("Failed to start instance status checker thread", e);
+                }
+
+            }
+        };
+
+        scheduledExecutor.scheduleAtFixedRate(runnable, 5, 3, TimeUnit.SECONDS);
 
     }
 
@@ -78,11 +127,11 @@ public class ServerUtil {
         String schemaIdsString = serviceAttributeMap.get(SCHEMA_IDS);
         if ( schemaIdsString != null && !schemaIdsString.isEmpty()){
             if (schemaIdsString.contains(SCHEMA_ENDPOINT_LIST_SPLITER)){
-                serverMicroserviceInstance.setEndpoints(Arrays.asList(endPointsString.split("\\$")));
+                serverMicroserviceInstance.setSchemas(Arrays.asList(endPointsString.split("\\$")));
             } else {
                 List<String> list  = new ArrayList<>();
                 list.add(schemaIdsString);
-                serverMicroserviceInstance.setEndpoints(list);
+                serverMicroserviceInstance.setSchemas(list);
             }
         }
 
@@ -112,7 +161,7 @@ public class ServerUtil {
 
     private static void startListenerForRegisterUnregisterEvent () {
         try {
-            byte[] buffer = new byte[4096]; // 4k
+            byte[] buffer = new byte[2048]; // 2k
             multicastSocket =  new MulticastSocket(PORT);
             group = InetAddress.getByName(GROUP);
             multicastSocket.joinGroup(group); // need to join the group to be able to receive the data
@@ -122,25 +171,26 @@ public class ServerUtil {
                 multicastSocket.receive(receivePacketBuffer);
                 String receivedPacketString = new String(receivePacketBuffer.getData());
 
-                /**
-                 * TODO Received service register/unregister event: {}{hostName=DESKTOP-Q2K46AO, instanceId=e3f169d7, appId=springmvc-sample, event=register,
-                 *  serviceId=16e8633d, serviceName=springmvcConsumer, version=0.0.2, status=UP}version=0.0.2, status=UP}
-                 */
-                LOGGER.info("Received service register/unregister event: {}", receivedPacketString);
                 Map<String, String> receivedStringMap = getMapFromString(receivedPacketString);
-                LOGGER.info("Converted service register/unregister event to Map {}", receivedStringMap);
+
                 if ( receivedStringMap != null && receivedStringMap.containsKey(EVENT)){
                     String event = receivedStringMap.get(EVENT);
                     if (event.equals(REGISTER_EVENT)){
+                        LOGGER.info("Received service register event{}", receivedStringMap);
                         zeroConfigRegistryService.registerMicroserviceInstance(receivedStringMap);
                     } else if (event.equals(UNREGISTER_EVENT)) {
+                        LOGGER.info("Received service unregister event{}", receivedStringMap);
                         zeroConfigRegistryService.unregisterMicroserviceInstance(receivedStringMap);
+                    } else if (event.equals(HEARTBEAT_EVENT)) {
+                        LOGGER.info("Received service heartbeat event{}", receivedStringMap);
+                        zeroConfigRegistryService.heartbeat(receivedStringMap);
                     } else {
-                        LOGGER.error("Unrecognized event type. event: {}" + event);
+                        LOGGER.error("Unrecognized event type. event: {}", event);
                     }
                 } else {
-                    LOGGER.error("Received event is null or doesn't have event type. {}" + receivedPacketString);
+                    LOGGER.error("Received service event is null or doesn't have event type. {}", receivedPacketString);
                 }
+                LOGGER.info("JUNGAN DEBUG microserviceInstanceMap: {} after receiving new event", ServerUtil.microserviceInstanceMap);
             }
 
         } catch (IOException e) {

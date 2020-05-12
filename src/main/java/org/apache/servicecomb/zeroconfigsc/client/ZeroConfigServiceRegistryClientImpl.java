@@ -3,7 +3,6 @@ package org.apache.servicecomb.zeroconfigsc.client;
 import com.google.common.base.Charsets;
 import com.google.common.hash.Hashing;
 
-import com.sun.jmx.defaults.ServiceName;
 import org.apache.servicecomb.zeroconfigsc.server.ZeroConfigRegistryService;
 import org.apache.servicecomb.zeroconfigsc.server.ServerMicroserviceInstance;
 import org.apache.servicecomb.foundation.vertx.AsyncResultCallback;
@@ -15,10 +14,6 @@ import org.apache.servicecomb.serviceregistry.api.response.MicroserviceInstanceC
 import org.apache.servicecomb.serviceregistry.client.ServiceRegistryClient;
 import org.apache.servicecomb.serviceregistry.client.http.Holder;
 import org.apache.servicecomb.serviceregistry.client.http.MicroserviceInstances;
-import org.apache.servicecomb.serviceregistry.version.Version;
-import org.apache.servicecomb.serviceregistry.version.VersionRule;
-import org.apache.servicecomb.serviceregistry.version.VersionRuleUtils;
-import org.apache.servicecomb.serviceregistry.version.VersionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -82,13 +77,13 @@ public class ZeroConfigServiceRegistryClientImpl implements ServiceRegistryClien
         return serviceId;
     }
 
-    // TODO TODO  TODO
     @Override
     public Microservice getMicroservice(String microserviceId) {
         // for registration
         if (ClientUtil.microserviceSelf.getServiceId().equals(microserviceId)){
             return ClientUtil.microserviceSelf;
         } else {
+            // called when consumer discover provider for the very first time
             ServerMicroserviceInstance serverMicroserviceInstance = zeroConfigRegistryService.getMicroservice(microserviceId);
             return ClientUtil.convertToClientMicroservice(serverMicroserviceInstance);
         }
@@ -146,7 +141,7 @@ public class ZeroConfigServiceRegistryClientImpl implements ServiceRegistryClien
             String endpoint = this.getEndpointForMicroservice(microserviceId);
             LOGGER.info("Found the endpoint: {} for the microserviceId: {}", endpoint, microserviceId);
             String schemaContentEndpoint = endpoint + SCHEMA_CONTENT_ENDPOINT_BASE_PATH + SCHEMA_CONTENT_ENDPOINT_SUBPATH + "?" + SCHEMA_CONTENT_ENDPOINT_QUERY_KEYWORD + "=" + schemaId;
-            LOGGER.info("Going to retrieve schema content from enpoint:{}", schemaContentEndpoint);
+            LOGGER.info("Going to retrieve schema content from endpoint:{}", schemaContentEndpoint);
             // Make a rest call to provider's endpoint directly to retrieve the schema content
             String schemaContent = new RestTemplate().postForObject(schemaContentEndpoint, null, String.class);
             LOGGER.info("Retrieved the schema content for microserviceId: {}, schemaId: {}, schemaContent: {}", microserviceId, schemaId, schemaContent);
@@ -154,43 +149,14 @@ public class ZeroConfigServiceRegistryClientImpl implements ServiceRegistryClien
         }
     }
 
-    // TODO TODO TODO Retrieve provider endpoint from server side ZeroConfigRegistryService
     private String getEndpointForMicroservice(String microserviceId){
-        // Retrieve
-//        String endpoint = null;
-//        Lookup lookup = null;
-//        try {
-//            ServiceName mdnsServiceName  = new ServiceName(microserviceId + MDNS_SERVICE_NAME_SUFFIX);
-//            lookup = new Lookup(mdnsServiceName);
-//            ServiceInstance[] services = lookup.lookupServices();
-//            for (ServiceInstance service : services) {
-//                Map<String, String> attributesMap = service.getTextAttributes();
-//                if (attributesMap != null && attributesMap.containsKey(ENDPOINTS)) {
-//                    String tempEndpoint = attributesMap.get(ENDPOINTS);
-//                    if (!tempEndpoint.contains(SCHEMA_ENDPOINT_LIST_SPLITER)){
-//                        endpoint = tempEndpoint.replace(ENDPOINT_PREFIX_REST, ENDPOINT_PREFIX_HTTP);
-//                    } else {
-//                        endpoint = tempEndpoint.split("\\$")[0].replace(ENDPOINT_PREFIX_REST, ENDPOINT_PREFIX_HTTP);
-//                    }
-//                }
-//                break;
-//            }
-//        } catch (IOException e) {
-//            LOGGER.error("Failed to create lookup object with error: {}", e);
-//        } finally {
-//            if (lookup != null) {
-//                try {
-//                    lookup.close();
-//                } catch (IOException e1) {
-//                    LOGGER.error("Failed to close lookup object with error: {}", e1);
-//                }
-//            }
-//        }
+        ServerMicroserviceInstance serverMicroserviceInstance = zeroConfigRegistryService.getMicroservice(microserviceId);
+        LOGGER.info("getEndpointForMicroservice: serverMicroserviceInstance: {}", serverMicroserviceInstance);
+        if (serverMicroserviceInstance != null && !serverMicroserviceInstance.getEndpoints().isEmpty()){
+            return serverMicroserviceInstance.getEndpoints().get(0);
+        }
         return null;
     }
-
-
-
 
     @Override
     public String getAggregatedSchema(String microserviceId, String schemaId) {
@@ -226,23 +192,24 @@ public class ZeroConfigServiceRegistryClientImpl implements ServiceRegistryClien
             instanceId = ClientUtil.generateServiceInstanceId(instance);
             instance.setInstanceId(instanceId);
         }
-        // TODO: 保持一个临时的 instance, 然后每隔几秒就发送一个心跳再自注册 广播一下
+
         try {
             // need currentMicroservice object to retrieve serviceName/appID/version attributes for instance to be registered
-            Optional<Map<String, String>> optionalServiceInstance = ClientUtil.convertToMDNSServiceInstance(serviceId, instanceId, instance, ClientUtil.microserviceSelf);
+            Map<String, String> serviceInstanceMap = ClientUtil.convertToRegisterDataModel(serviceId, instanceId, instance, ClientUtil.microserviceSelf).get();
 
-            if (optionalServiceInstance.isPresent()){
-                byte[] instanceData = optionalServiceInstance.get().toString().getBytes();
-                DatagramPacket instanceDataPacket = new DatagramPacket(instanceData, instanceData.length, InetAddress.getByName(GROUP), PORT);
-                this.multicastSocket.send(instanceDataPacket);
-            } else {
-                LOGGER.error("Failed to register microservice instance. Because optionalServiceInstance is null/empty: {}", optionalServiceInstance);
-                return null;
-            }
+            byte[] instanceData = serviceInstanceMap.toString().getBytes();
+            DatagramPacket instanceDataPacket = new DatagramPacket(instanceData, instanceData.length, InetAddress.getByName(GROUP), PORT);
+            this.multicastSocket.send(instanceDataPacket);
+
+            // set this variable for heartbeat itself status
+            serviceInstanceMap.put(EVENT, HEARTBEAT_EVENT);
+            ClientUtil.serviceInstanceMapForHeartbeat = serviceInstanceMap;
+
         } catch (IOException e) {
             LOGGER.error("Failed to register microservice instance to mdns. servcieId: {} instanceId:{}", serviceId, instanceId,  e);
             return null;
         }
+
         return instanceId;
     }
 
@@ -332,73 +299,33 @@ public class ZeroConfigServiceRegistryClientImpl implements ServiceRegistryClien
         return instances.getInstancesResponse().getInstances();
     }
 
-    // TODO TODO TODO from ZeroConfigRegistryService 获取 结合参考 Local的实现
     @Override
-    public MicroserviceInstances findServiceInstances(String consumerId, String appId, String serviceName, String strVersionRule, String revision) {
-        int currentRevision = 1;
+    public MicroserviceInstances findServiceInstances(String consumerId, String appId, String providerServiceName, String strVersionRule, String revision) {
+        LOGGER.info("find service instance for consumerId: {}, providerServiceName: {}, versionRule: {}, revision: {}", consumerId, providerServiceName, strVersionRule, revision);
+        /**
+         *  1. consumerId not the provider service Id
+         *  2. called by RefreshableMicroserviceCache.pullInstanceFromServiceCenter when consumer make a call to service provider for the first time
+         *
+         *  strVersionRule: "0.0.0.0+", revision： null
+         *
+         */
 
-        List<MicroserviceInstance> allInstances = new ArrayList<>();
-        MicroserviceInstances microserviceInstances = new MicroserviceInstances();
+        MicroserviceInstances resultMicroserviceInstances = new MicroserviceInstances();
         FindInstancesResponse response = new FindInstancesResponse();
-        if (revision != null && currentRevision == Integer.parseInt(revision)) {
-            microserviceInstances.setNeedRefresh(false);
-            return microserviceInstances;
+        List<MicroserviceInstance> clientInstanceList = new ArrayList<>();
+
+        List<ServerMicroserviceInstance>  serverMicroserviceInstanceList = this.zeroConfigRegistryService.
+                findServiceInstances(appId, providerServiceName, strVersionRule, revision);
+
+        for (ServerMicroserviceInstance serverMicroserviceInstance : serverMicroserviceInstanceList) {
+            clientInstanceList.add(ClientUtil.convertToClientMicroserviceInstance(serverMicroserviceInstance));
         }
 
-        microserviceInstances.setRevision(String.valueOf(currentRevision));
-        VersionRule versionRule = VersionRuleUtils.getOrCreate(strVersionRule);
-        Microservice latestMicroservice = findLatest(appId, serviceName, versionRule);
-        if (latestMicroservice == null) {
-            microserviceInstances.setMicroserviceNotExist(true);
-            return microserviceInstances;
-        }
-
-        Version latestVersion = VersionUtils.getOrCreate(latestMicroservice.getVersion());
-        for (Microservice microservice : this.getAllMicroservices()) {
-            if (!isSameMicroservice(microservice, appId, serviceName)) {
-                continue;
-            }
-
-            Version version = VersionUtils.getOrCreate(microservice.getVersion());
-            if (!versionRule.isMatch(version, latestVersion)) {
-                continue;
-            }
-
-            List<MicroserviceInstance> microserviceInstanceList = this.getMicroserviceInstance(null, microservice.getServiceId());
-            allInstances.addAll(microserviceInstanceList);
-        }
-        response.setInstances(allInstances);
-        microserviceInstances.setInstancesResponse(response);
-
-        return microserviceInstances;
+        response.setInstances(clientInstanceList);
+        resultMicroserviceInstances.setInstancesResponse(response);
+        return resultMicroserviceInstances;
     }
 
-
-
-    private Microservice findLatest(String appId, String serviceName, VersionRule versionRule) {
-        Version latestVersion = null;
-        Microservice latest = null;
-        List<Microservice> microserviceList = this.getAllMicroservices();
-        for (Microservice microservice : microserviceList) {
-            if (!isSameMicroservice(microservice, appId, serviceName)) {
-                continue;
-            }
-            Version version = VersionUtils.getOrCreate(microservice.getVersion());
-            if (!versionRule.isAccept(version)) {
-                continue;
-            }
-            if (latestVersion == null || version.compareTo(latestVersion) > 0) {
-                latestVersion = version;
-                latest = microservice;
-            }
-        }
-
-        return latest;
-    }
-
-    private boolean isSameMicroservice(Microservice microservice, String appId, String serviceName) {
-        return microservice.getAppId().equals(appId) && microservice.getServiceName().equals(serviceName);
-    }
 
     @Override
     public MicroserviceInstance findServiceInstance(String serviceId, String instanceId) {

@@ -1,5 +1,6 @@
 package org.apache.servicecomb.zeroconfigsc;
 
+import org.apache.servicecomb.zeroconfigsc.client.ClientUtil;
 import org.apache.servicecomb.zeroconfigsc.client.ZeroConfigServiceRegistryClientImpl;
 import org.apache.servicecomb.foundation.common.utils.BeanUtils;
 import org.apache.servicecomb.serviceregistry.ServiceRegistry;
@@ -33,6 +34,7 @@ public class ZeroConfigServiceRegistryApplicationListener implements Application
         this.applicationContext = applicationContext;
         BeanUtils.setContext(applicationContext);
         ServerUtil.init();
+        ClientUtil.init();
 
         ServiceRegistryConfig serviceRegistryConfig = ServiceRegistryConfig.INSTANCE;
         Function<ServiceRegistry, ServiceRegistryClient> serviceRegistryClientConstructor =
