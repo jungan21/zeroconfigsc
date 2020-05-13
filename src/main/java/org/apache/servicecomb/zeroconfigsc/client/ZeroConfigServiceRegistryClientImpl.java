@@ -3,6 +3,10 @@ package org.apache.servicecomb.zeroconfigsc.client;
 import com.google.common.base.Charsets;
 import com.google.common.hash.Hashing;
 
+import org.apache.servicecomb.serviceregistry.version.Version;
+import org.apache.servicecomb.serviceregistry.version.VersionRule;
+import org.apache.servicecomb.serviceregistry.version.VersionRuleUtils;
+import org.apache.servicecomb.serviceregistry.version.VersionUtils;
 import org.apache.servicecomb.zeroconfigsc.server.ServerUtil;
 import org.apache.servicecomb.zeroconfigsc.server.ZeroConfigRegistryService;
 import org.apache.servicecomb.zeroconfigsc.server.ServerMicroserviceInstance;
@@ -141,7 +145,7 @@ public class ZeroConfigServiceRegistryClientImpl implements ServiceRegistryClien
             // called by consumer to load provider's schema content for the very first time
             String endpoint = this.getEndpointForMicroservice(microserviceId);
             String schemaContentEndpoint = endpoint + SCHEMA_CONTENT_ENDPOINT_BASE_PATH + SCHEMA_CONTENT_ENDPOINT_SUBPATH + "?" + SCHEMA_CONTENT_ENDPOINT_QUERY_KEYWORD + "=" + schemaId;
-            LOGGER.info("Going to retrieve schema content from endpoint:{}", schemaContentEndpoint);
+            // LOGGER.info("Going to retrieve schema content from endpoint:{}", schemaContentEndpoint);
             // Make a rest call to provider's endpoint directly to retrieve the schema content
             String schemaContent = new RestTemplate().postForObject(schemaContentEndpoint, null, String.class);
             //LOGGER.debug("Retrieved the schema content for microserviceId: {}, schemaId: {}, schemaContent: {}", microserviceId, schemaId, schemaContent);
@@ -291,31 +295,63 @@ public class ZeroConfigServiceRegistryClientImpl implements ServiceRegistryClien
         return instances.getInstancesResponse().getInstances();
     }
 
+    /**
+     * called by RefreshableMicroserviceCache.pullInstanceFromServiceCenter when consumer call provider for the first time
+     * https://github.com/apache/servicecomb-service-center/blob/master/server/core/swagger/v4.yaml
+     *
+     * @param consumerId in http header, NOT the query parameters ("X-ConsumerId", consumerId);
+     * @param appId: = appId (Server side, Required)
+     * @param providerServiceName: = serviceName (Server side, Required)
+     * @param strVersionRule: = version (Server side, Required) (e.g. 0.0.0.0+") 1.精确版本匹配 2.后续版本匹配 3.最新版本 4.版本范围
+     * @param revision: = rev (Server side, Optional. is null) for compatible with existing system
+     * @return MicroserviceInstances  collection of Microservice Instance for (appId, providerServiceName, strVersionRule)
+     */
     @Override
     public MicroserviceInstances findServiceInstances(String consumerId, String appId, String providerServiceName, String strVersionRule, String revision) {
         LOGGER.info("find service instance for consumerId: {}, providerServiceName: {}, versionRule: {}, revision: {}", consumerId, providerServiceName, strVersionRule, revision);
-        /**
-         *  1. consumerId not the provider service Id
-         *  2. called by RefreshableMicroserviceCache.pullInstanceFromServiceCenter when consumer make a call to service provider for the first time
-         *
-         *  strVersionRule: "0.0.0.0+", revision： null
-         *
-         */
 
         MicroserviceInstances resultMicroserviceInstances = new MicroserviceInstances();
         FindInstancesResponse response = new FindInstancesResponse();
-        List<MicroserviceInstance> clientInstanceList = new ArrayList<>();
+        List<MicroserviceInstance> resultInstanceList = new ArrayList<>();
 
-        List<ServerMicroserviceInstance>  serverMicroserviceInstanceList = this.zeroConfigRegistryService.
-                findServiceInstances(appId, providerServiceName, strVersionRule, revision);
+        // 1.  find matched appId and serviceName from "Server"
+        List<ServerMicroserviceInstance>  tempServerInstanceList = this.zeroConfigRegistryService.
+                findServiceInstances(appId, providerServiceName);
 
-        for (ServerMicroserviceInstance serverMicroserviceInstance : serverMicroserviceInstanceList) {
-            clientInstanceList.add(ClientUtil.convertToClientMicroserviceInstance(serverMicroserviceInstance));
+        // 2.  find matched instance based on the strVersionRule
+        VersionRule versionRule = VersionRuleUtils.getOrCreate(strVersionRule);
+
+        ServerMicroserviceInstance latestVersionInstance = findLatestVersionInstance(tempServerInstanceList, versionRule);
+        Version latestVersion = VersionUtils.getOrCreate(latestVersionInstance.getVersion());
+
+        for (ServerMicroserviceInstance serverInstance : tempServerInstanceList){
+            Version version = VersionUtils.getOrCreate(serverInstance.getVersion());
+            if (!versionRule.isMatch(version, latestVersion)) {
+                continue;
+            }
+            resultInstanceList.add(ClientUtil.convertToClientMicroserviceInstance(serverInstance));
         }
 
-        response.setInstances(clientInstanceList);
+        response.setInstances(resultInstanceList);
         resultMicroserviceInstances.setInstancesResponse(response);
         return resultMicroserviceInstances;
+    }
+
+    private ServerMicroserviceInstance findLatestVersionInstance(List<ServerMicroserviceInstance> instanceList, VersionRule versionRule) {
+        Version latestVersion = null;
+        ServerMicroserviceInstance latestVersionInstance = null;
+        for (ServerMicroserviceInstance serverInstance : instanceList) {
+            Version version = VersionUtils.getOrCreate(serverInstance.getVersion());
+            if (!versionRule.isAccept(version)) {
+                continue;
+            }
+
+            if (latestVersion == null || version.compareTo(latestVersion) > 0) {
+                latestVersion = version;
+                latestVersionInstance = serverInstance;
+            }
+        }
+        return latestVersionInstance;
     }
 
 

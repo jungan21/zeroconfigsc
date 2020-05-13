@@ -96,11 +96,11 @@ public class ZeroConfigRegistryService {
        return serverMicroserviceInstanceList.get(0);
     }
 
-    public List<ServerMicroserviceInstance> findServiceInstances(String appId, String serviceName, String strVersionRule, String revision) {
+    public List<ServerMicroserviceInstance> findServiceInstances(String appId, String serviceName) {
         List<ServerMicroserviceInstance> resultInstanceList = new ArrayList<>();
-
         ServerUtil.microserviceInstanceMap.forEach((serviceId, instanceIdMap) -> {
             instanceIdMap.forEach((instanceId, instance) -> {
+                // match appId and ServiceName
                 if (appId.equals(instance.getAppId()) && serviceName.equals(instance.getServiceName())){
                     resultInstanceList.add(instance);
                 }

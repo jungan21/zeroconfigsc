@@ -1,6 +1,5 @@
 package org.apache.servicecomb.zeroconfigsc;
 
-import org.apache.servicecomb.serviceregistry.client.LocalServiceRegistryClientImpl;
 import org.apache.servicecomb.zeroconfigsc.client.ClientUtil;
 import org.apache.servicecomb.zeroconfigsc.client.ZeroConfigServiceRegistryClientImpl;
 import org.apache.servicecomb.foundation.common.utils.BeanUtils;
@@ -33,6 +32,8 @@ public class ZeroConfigServiceRegistryApplicationListener implements Application
 
     @Override
     public void setApplicationContext(ApplicationContext applicationContext) throws BeansException {
+
+        // Same mechanims as Local registry to enable the Zero Config registry
         String flag = System.getProperty(ZeroConfigRegistryConstants.ZERO_CONFIG_REGISTRY_FLAG);
         if (!StringUtils.isEmpty(flag) && flag.equals(ZeroConfigRegistryConstants.ZERO_CONFIG_REGISTRY_ENABLE_FLAG)){
             this.applicationContext = applicationContext;
