@@ -31,9 +31,8 @@ public class ClientUtil {
         Runnable heartbeatRunnable = new Runnable() {
             @Override
             public void run() {
-                LOGGER.info("Client side runs scheduled heartbeat event for serviceInstanceMapForHeartbeat: {}", serviceInstanceMapForHeartbeat);
-                // after first registration succeeds
                 if (serviceInstanceMapForHeartbeat != null && !serviceInstanceMapForHeartbeat.isEmpty()){
+                    // after first registration succeeds
                     try {
                         byte[] heartbeatEventDataBytes = serviceInstanceMapForHeartbeat.toString().getBytes();
                         MulticastSocket multicastSocket = new MulticastSocket();
@@ -45,12 +44,12 @@ public class ClientUtil {
 
                         multicastSocket.send(instanceDataPacket);
                     } catch (Exception e) {
-                        LOGGER.error("Failed to send heartbeat event", e);
+                        LOGGER.error("Failed to send heartbeat event for object: {}", serviceInstanceMapForHeartbeat, e);
                     }
                 }
             }
         };
-        executor.scheduleAtFixedRate(heartbeatRunnable, 2, 3, TimeUnit.SECONDS);
+        executor.scheduleAtFixedRate(heartbeatRunnable, CLIENT_DELAY, HEALTH_CHECK_INTERVAL, TimeUnit.SECONDS);
     }
 
 
@@ -111,7 +110,8 @@ public class ClientUtil {
     }
 
     public static String generateServiceId(Microservice microservice){
-        String serviceIdStringIndex = String.join("/", microservice.getAppId(), microservice.getServiceName(), microservice.getVersion());
+        String serviceIdStringIndex = String.join(SERVICE_ID_SPLITER, microservice.getAppId(),
+                microservice.getServiceName(), microservice.getVersion());
         return UUID.nameUUIDFromBytes(serviceIdStringIndex.getBytes()).toString().split(UUID_SPLITER)[0];
     }
 

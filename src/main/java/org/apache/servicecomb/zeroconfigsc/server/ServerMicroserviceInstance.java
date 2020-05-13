@@ -22,7 +22,6 @@ public class ServerMicroserviceInstance {
 
     private String hostName;
 
-    // for compatibale with legacy code
     private String status;
 
     private Instant lastHeartbeatTimeStamp;

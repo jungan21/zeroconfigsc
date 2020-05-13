@@ -20,7 +20,7 @@ import java.util.function.Function;
 
 
 /**
- * to make sure  ZeroConfigServiceRegistryClientImpl is injected before cse application listener (order is -1000)
+ * ZeroConfigServiceRegistryClientImpl is injected before cse application listener (order is -1000)
  */
 
 @Configuration

@@ -1,5 +1,6 @@
 package org.apache.servicecomb.zeroconfigsc.server;
 
+import org.apache.servicecomb.zeroconfigsc.client.ClientUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -34,65 +35,63 @@ public class ServerUtil {
         try {
             group = InetAddress.getByName(GROUP);
         } catch (UnknownHostException e) {
-            LOGGER.error("Unknown host exception when creating group" + e);
+            LOGGER.error("Unknown host exception when creating MulticastSocket group" + e);
         }
-        startEventListenerThread();
-        startInstanceStatusCheckerThread();
+        startEventListenerTask();
+        startInstanceHealthCheckerTask();
     }
 
-    private static void startEventListenerThread(){
+    private static void startEventListenerTask(){
         ExecutorService listenerExecutor = Executors.newSingleThreadExecutor();
         listenerExecutor.submit(() -> {
             startListenerForRegisterUnregisterEvent();
         });
     }
 
-    private static void startInstanceStatusCheckerThread(){
+    private static void startInstanceHealthCheckerTask(){
         Runnable runnable = new Runnable() {
             @Override
             public void run() {
-                LOGGER.info("Server side runs scheduled health check task");
-                List<ServerMicroserviceInstance> toBeRemovedInstanceList = new ArrayList<>();
-
-                try {
-                    // check status
-                    for (Map.Entry<String, Map<String, ServerMicroserviceInstance>> entry : microserviceInstanceMap.entrySet()){
-                        if (entry.getValue() != null){
-                            Map<String, ServerMicroserviceInstance>  instanceIdMap = entry.getValue();
-                            for (Map.Entry<String, ServerMicroserviceInstance> innerEntry : instanceIdMap.entrySet()) {
-                                ServerMicroserviceInstance instance = innerEntry.getValue();
-                                // current time - last heartbeattime > 3 seconds => dead instance
-                                if (instance.getLastHeartbeatTimeStamp() != null &&
-                                        instance.getLastHeartbeatTimeStamp().plusSeconds(HEALTH_CHECK_INTERVAL).compareTo(Instant.now()) < 0)
-                                    toBeRemovedInstanceList.add(innerEntry.getValue());
-                            }
-                        }
+                if (!microserviceInstanceMap.isEmpty()){
+                    List<ServerMicroserviceInstance> unhealthyInstanceList = findUnhealthyInstances();
+                    if (!unhealthyInstanceList.isEmpty()){
+                        removeDeadInstance(unhealthyInstanceList);
                     }
-
-                    // remove dead instances
-                    if (!toBeRemovedInstanceList.isEmpty()){
-                        for (ServerMicroserviceInstance instance : toBeRemovedInstanceList){
-                            for (Map.Entry<String, Map<String, ServerMicroserviceInstance>> entry : microserviceInstanceMap.entrySet()){
-                                String serviceId = entry.getKey();
-                                Map<String, ServerMicroserviceInstance>  instanceIdMap = entry.getValue();
-                                if (serviceId.equals(instance.getServiceId())){
-                                    instanceIdMap.remove(instance.getServiceId());
-                                }
-                            }
-                        }
-                    }
-
-                    LOGGER.info("JUNGAN DEBUG microserviceInstanceMap after remove dead instance:  {}", microserviceInstanceMap);
-
-                } catch (Exception e) {
-                    LOGGER.error("Failed to start instance status checker thread", e);
                 }
-
             }
         };
+        scheduledExecutor.scheduleAtFixedRate(runnable, SERVER_DELAY, HEALTH_CHECK_INTERVAL, TimeUnit.SECONDS);
+    }
 
-        scheduledExecutor.scheduleAtFixedRate(runnable, 5, 3, TimeUnit.SECONDS);
+    private static List<ServerMicroserviceInstance> findUnhealthyInstances(){
+        List<ServerMicroserviceInstance> unhealthyInstanceList = new ArrayList<>();
+        microserviceInstanceMap.forEach((serviceId, instanceIdMap) -> {
+            instanceIdMap.forEach((instanceId, instance) -> {
+                // current time - last heartbeattime > 3 seconds => dead instance (no heartbeat for more than 3 seconds)
+              if (instance.getLastHeartbeatTimeStamp() != null &&
+                      instance.getLastHeartbeatTimeStamp().plusSeconds(HEALTH_CHECK_INTERVAL).compareTo(Instant.now()) < 0){
+                  unhealthyInstanceList.add(instance);
+                  LOGGER.info("Detected a unhealthy service instance. serviceId: {}, instanceId: {}", instance.getServiceId(), instance.getInstanceId());
+                  LOGGER.info("############################################################################");
+                  LOGGER.info("JUNGAN DEBUG after register {}", ServerUtil.microserviceInstanceMap);
+                  LOGGER.info("############################################################################");
+              }
+          });
+        });
+        return unhealthyInstanceList;
+    }
 
+    private static void removeDeadInstance(List<ServerMicroserviceInstance> unhealthyInstanceList) {
+        for (ServerMicroserviceInstance deadInstance : unhealthyInstanceList) {
+            microserviceInstanceMap.computeIfPresent(deadInstance.getServiceId(), (serviceId, instanceIdMap) -> {
+                instanceIdMap.computeIfPresent(deadInstance.getInstanceId(), (instanceId, instance) -> {
+                    // remove this instance from inner instance map
+                    return null;
+                });
+                // if the inner instance map is empty, remove the service itself from the outer map too
+                return !instanceIdMap.isEmpty() ? instanceIdMap : null;
+            });
+        }
     }
 
     public static Optional<ServerMicroserviceInstance> convertToServerMicroserviceInstance(Map<String, String> serviceInstanceAttributeMap){
@@ -131,11 +130,11 @@ public class ServerUtil {
     private static Map<String, String> getMapFromString(String str){
         Map<String,String> map = new HashMap<>();
         String trimedString = str.trim();
-        if (trimedString.startsWith("{") && trimedString.endsWith("}") && trimedString.length() > 2) {
+        if (trimedString.startsWith(MAP_STRING_LEFT) && trimedString.endsWith(MAP_STRING_RIGHT) && trimedString.length() > 2) {
             trimedString = trimedString.substring(1, trimedString.length()-1);
-            String[] keyValue = trimedString.split(",");
+            String[] keyValue = trimedString.split(MAP_ELEMENT_SPILITER);
             for (int i = 0; i < keyValue.length; i++) {
-                String[] str2 = keyValue[i].split("=");
+                String[] str2 = keyValue[i].split(MAP_KV_SPILITER);
                 if(str2.length-1 == 0){
                     map.put(str2[0].trim(),"");
                 }else{
@@ -150,7 +149,7 @@ public class ServerUtil {
 
     private static void startListenerForRegisterUnregisterEvent () {
         try {
-            byte[] buffer = new byte[2048]; // 2k
+            byte[] buffer = new byte[DATA_PACKET_BUFFER_SIZE];
             multicastSocket =  new MulticastSocket(PORT);
             group = InetAddress.getByName(GROUP);
             multicastSocket.joinGroup(group); // need to join the group to be able to receive the data
@@ -165,21 +164,26 @@ public class ServerUtil {
                 if ( receivedStringMap != null && receivedStringMap.containsKey(EVENT)){
                     String event = receivedStringMap.get(EVENT);
                     if (event.equals(REGISTER_EVENT)){
-                        LOGGER.info("Received service register event{}", receivedStringMap);
+                        LOGGER.info("Received REGISTER event{}", receivedStringMap);
                         zeroConfigRegistryService.registerMicroserviceInstance(receivedStringMap);
-                    } else if (event.equals(UNREGISTER_EVENT)) {
-                        LOGGER.info("Received service unregister event{}", receivedStringMap);
+                        LOGGER.info("############################################################################");
+                        LOGGER.info("JUNGAN DEBUG after register {}", ServerUtil.microserviceInstanceMap);
+                        LOGGER.info("############################################################################");
+                    } else if (event.equals(UNREGISTER_EVENT)){
+                        LOGGER.info("Received UNREGISTER event{}", receivedStringMap);
                         zeroConfigRegistryService.unregisterMicroserviceInstance(receivedStringMap);
-                    } else if (event.equals(HEARTBEAT_EVENT)) {
-                        LOGGER.info("Received service heartbeat event{}", receivedStringMap);
+                    } else if (event.equals(HEARTBEAT_EVENT)){
+                        // check if received event is for service instance itself
+                        if (isSelfServiceInstance(receivedStringMap)){
+                            continue;
+                        }
                         zeroConfigRegistryService.heartbeat(receivedStringMap);
                     } else {
                         LOGGER.error("Unrecognized event type. event: {}", event);
                     }
                 } else {
-                    LOGGER.error("Received service event is null or doesn't have event type. {}", receivedPacketString);
+                    LOGGER.error("Received event is null or doesn't have event type. {}", receivedPacketString);
                 }
-                LOGGER.info("JUNGAN DEBUG microserviceInstanceMap: {} after receiving new event", ServerUtil.microserviceInstanceMap);
             }
 
         } catch (IOException e) {
@@ -196,5 +200,21 @@ public class ServerUtil {
                 }
             }
         }
+    }
+
+    private static boolean isSelfServiceInstance(Map<String, String> receivedStringMap) {
+        if (ClientUtil.serviceInstanceMapForHeartbeat == null){
+            return false;
+        } else {
+            // service instance itself
+            String selfServiceId = ClientUtil.serviceInstanceMapForHeartbeat.get(SERVICE_ID);
+            String selfInstanceId = ClientUtil.serviceInstanceMapForHeartbeat.get(INSTANCE_ID);
+
+            // received event for other service instance
+            String serviceId = receivedStringMap.get(SERVICE_ID);
+            String instanceId = receivedStringMap.get(INSTANCE_ID);
+            return selfServiceId.equals(serviceId) && selfInstanceId.equals(instanceId);
+        }
+
     }
 }
