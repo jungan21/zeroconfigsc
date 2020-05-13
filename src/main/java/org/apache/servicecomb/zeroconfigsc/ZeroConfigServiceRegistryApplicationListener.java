@@ -1,5 +1,6 @@
 package org.apache.servicecomb.zeroconfigsc;
 
+import org.apache.servicecomb.serviceregistry.client.LocalServiceRegistryClientImpl;
 import org.apache.servicecomb.zeroconfigsc.client.ClientUtil;
 import org.apache.servicecomb.zeroconfigsc.client.ZeroConfigServiceRegistryClientImpl;
 import org.apache.servicecomb.foundation.common.utils.BeanUtils;
@@ -15,6 +16,7 @@ import org.springframework.context.ApplicationListener;
 
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
+import org.springframework.util.StringUtils;
 
 import java.util.function.Function;
 
@@ -31,15 +33,18 @@ public class ZeroConfigServiceRegistryApplicationListener implements Application
 
     @Override
     public void setApplicationContext(ApplicationContext applicationContext) throws BeansException {
-        this.applicationContext = applicationContext;
-        BeanUtils.setContext(applicationContext);
-        ServerUtil.init();
-        ClientUtil.init();
+        String flag = System.getProperty(ZeroConfigRegistryConstants.ZERO_CONFIG_REGISTRY_FLAG);
+        if (!StringUtils.isEmpty(flag) && flag.equals(ZeroConfigRegistryConstants.ZERO_CONFIG_REGISTRY_ENABLE_FLAG)){
+            this.applicationContext = applicationContext;
+            BeanUtils.setContext(applicationContext);
+            ServerUtil.init();
+            ClientUtil.init();
 
-        ServiceRegistryConfig serviceRegistryConfig = ServiceRegistryConfig.INSTANCE;
-        Function<ServiceRegistry, ServiceRegistryClient> serviceRegistryClientConstructor =
+            ServiceRegistryConfig serviceRegistryConfig = ServiceRegistryConfig.INSTANCE;
+            Function<ServiceRegistry, ServiceRegistryClient> serviceRegistryClientConstructor =
                 serviceRegistry -> new ZeroConfigServiceRegistryClientImpl();
-        serviceRegistryConfig.setServiceRegistryClientConstructor(serviceRegistryClientConstructor);
+            serviceRegistryConfig.setServiceRegistryClientConstructor(serviceRegistryClientConstructor);
+        }
     }
 
     @Override

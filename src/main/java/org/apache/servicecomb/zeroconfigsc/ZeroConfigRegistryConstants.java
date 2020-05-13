@@ -2,6 +2,9 @@ package org.apache.servicecomb.zeroconfigsc;
 
 public interface ZeroConfigRegistryConstants {
 
+    String ZERO_CONFIG_REGISTRY_FLAG = "zeroconfig.registry.flag";
+    String ZERO_CONFIG_REGISTRY_ENABLE_FLAG = "enable";
+
     // MulticastSocket related
     String GROUP = "225.0.0.0";
     Integer PORT = 6666;
